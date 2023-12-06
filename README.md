@@ -37,5 +37,5 @@ LND_GRPC_CERT -> path to LND cert
 LND_GRPC_ENDPOINT -> LND IP  
 LND_GRPC_PORT -> LND gRPC port  
 
-Additional settings are configured in config/defaul.json
+Additional settings are configured in config/default.json
 
