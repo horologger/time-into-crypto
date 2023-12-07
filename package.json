@@ -1,44 +1,30 @@
 {
-  "name": "sparkkiosk",
-  "version": "0.0.1",
-  "description": "Micro Lightning enabled kiosk payment solution",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jensgertsen/sparkkiosk.git"
-  },
-  "keywords": [
-    "Lightning",
-    "bitcoin",
-    "kiosk"
-  ],
-  "author": "Jens Gertsen",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/jensgertsen/sparkkiosk/issues"
-  },
-  "homepage": "https://github.com/jensgertsen/sparkkiosk#readme",
-  "dependencies": {
-    "@grpc/grpc-js": "^1.5.7",
-    "@grpc/proto-loader": "^0.6.9",
-    "bech32": "^2.0.0",
-    "better-express-store": "^1.0.4",
-    "better-sqlite3": "^7.5.0",
-    "body-parser": "^1.19.2",
-    "config": "^3.3.7",
-    "date-and-time": "^2.2.1",
-    "email-validator": "^2.0.4",
-    "express": "^4.17.3",
-    "express-session": "^1.17.2",
-    "fs": "^0.0.1-security",
-    "http": "^0.0.1-security",
-    "mailersend": "^1.3.1",
-    "node-fetch": "^3.2.0",
-    "request": "^2.88.2",
-    "socks-proxy-agent": "^6.2.0-beta.0",
-    "url": "^0.11.0"
-  }
+    "name": "timeintocrypto",
+    "dependencies": {
+        "express": "latest",
+        "express-session": "*",
+
+        "axios": "latest",
+
+        "passport": "latest",
+        "nodemon": "latest",
+        "better-sqlite3": "latest",
+        "ws": "^7.0.1",
+
+        "nunjucks": "latest",
+
+        "bootstrap": "^3.3.7",
+        "d3": "^7.8.2",
+        "handlebars": "^4.0.10",
+        "jquery": "^3.2.1",
+        "cookie-parser": "*",
+        "moment": "^2.10.3",
+        "ln-service": "latest",
+        "kraken-api": "latest",
+        "fast-xml-parser": "latest"
+    },
+    "scripts": {
+        "debug": "nodemon -e js,njk server.js",
+        "start": "node server.js"
+    }
 }

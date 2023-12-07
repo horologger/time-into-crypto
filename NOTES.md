@@ -21,7 +21,26 @@ LND_GRPC_ENDPOINT=10.21.21.9
 LND_GRPC_MACAROON=/lnd/data/chain/bitcoin/mainnet/admin.macaroon
 LND_GRPC_PORT=10009
 
+sudo ./umbrel/scripts/repo checkout https://github.com/horologger/umbrelappstore.git
+sudo ./umbrel/scripts/app install isviable-timeintocrypto
+sudo ./umbrel/scripts/app start isviable-timeintocrypto
+sudo ./umbrel/scripts/app restart isviable-timeintocrypto
 
+```
+On Zilla
+```sh
+su - alunde
+docker pull horologger/timeintocrypto:v0.0.0
+mkdir -p ~/.timeintocrypto/data
+```
+First run
+```
+docker run \
+-e PORT=21284 \
+-v data:/data \
+-p 21284:21284 \
+--name timeintocrypto \
+-it horologger/timeintocrypto:v0.0.0 
 ```
 
 On Ragnar

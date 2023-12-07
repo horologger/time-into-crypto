@@ -1,15 +1,21 @@
-FROM node:12-buster-slim AS builder
+FROM node:18-slim
 
-WORKDIR /build
+WORKDIR /app
+
 COPY . .
+
 RUN apt-get update
-RUN apt-get install -y git python3 build-essential
-RUN npm install
+RUN apt-get -y install gpm procps lsof vim sqlite3
+RUN npm install --omit=dev --no-save
+RUN chown -R node:node /app/server.js
+RUN chmod 777 /app/server.js
 
+ENV NODE_ENV=production
 
-FROM node:12-buster-slim
-USER 1000
-WORKDIR /build
-COPY --from=builder /build .
-EXPOSE 21214
-CMD [ "node", "app.mjs"]
+RUN chown -R node:node /app/data
+RUN chmod 777 /app/data
+RUN rm -f /app/data/empty.dir
+
+EXPOSE 21284
+USER node
+CMD [ "npm", "start" ]

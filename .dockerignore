@@ -1,0 +1,9 @@
+node_modules/
+default-*.json
+default-env.json
+.env
+.git/
+.github/
+.yo-rc.json
+.vscode/
+.DS_Store

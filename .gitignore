@@ -2,3 +2,5 @@ node-modules/
 docker_build.txt
 noter.txt
 db.sql
+.vscode/
+data/
