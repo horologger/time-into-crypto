@@ -239,110 +239,27 @@ app.get(['/noauth','/sqlite','/sqlite/noauth','/socket','/socket/noauth'], funct
     res.status(200).json(info);
 });
 
-app.get(["/","/links"], function (req, res) {
+app.get(["/"], function (req, res) {
+    res.sendFile('/index.html');
+});
+
+app.get(["/links"], function (req, res) {
     console.log("served from adm.js");
     
     console.log(req.headers['x-forwarded-host']);
 
     var responseStr = "";
     responseStr += "<!DOCTYPE HTML><html><head><title>Crypto Rates ADM</title></head><body><h3>Crypto Rates ADM</h3><br />";
-    responseStr += "<a href=\"/sqlite/links\">SQLite Links</a> requires authorization.<br />";
-    responseStr += "<a href=\"/sqlite/noauth\">SQLite NoAuth</a> no authorization.<br />";
-    responseStr += "<a href=\"/spfi/links\">SPFI Links</a> no authorization.<br />";
-    responseStr += "<a href=\"/spfi/noauth\">SPFI NoAuth</a> no authorization.<br />";
-    responseStr += "<a href=\"/socket/links\">Socket Links</a> no authorization.<br />";
-    responseStr += "<a href=\"/socket/noauth\">Socket NoAuth</a> no authorization.<br />";
-    responseStr += "<a href=\"/oauth/links\">oauth Links</a> no authorization.<br />";
-    responseStr += "<a href=\"/noauth\">NoAuth</a> no authorization.<br />";
+    responseStr += "<a href=\"/admin/links\">Admin Links</a> requires authorization.<br />";
+    responseStr += "<a href=\"/rates/links\">Rates Links</a> no authorization.<br />";
     responseStr += "<br />";
-    responseStr += "<a href=\"/\">Return to SQLite Root.</a><br />";
+    responseStr += "<a href=\"/\">Return to Root.</a><br />";
     responseStr += "</body></html>";
     res.status(200).send(responseStr);
 });
 
-
-// These are now in routes/oauth.js
-
-// Define OAuth2 Token Endpoint
-// app.post('/oauth/token', oauth20.controller.token);
-
-// Some secure client method
-// app.get('/oauth/client', oauth20.middleware.bearer, function(req, res) {
-//     if (!req.oauth2.accessToken) return res.status(403).send('Forbidden');
-//     res.send('Hi! Dear client ' + req.oauth2.accessToken.clientId + '!');
-// });
-
-
-// No authorization for anything prefixed with /spfi/ or /socket/
-app.all(["/spfi/*","/meter/*"], function (req, res, next) {
-    var hostname = "localhost";
-
-    if (((typeof req) == "object") && ((typeof req.headers) == "object") && ((typeof req.headers['x-forwarded-host']) == "string")) {
-        hostname = req.headers['x-forwarded-host'];
-    }
-    console.log("-" + req.method + " " + hostname + req.url);
-    // console.log(util.inspect(req.authInfo, {depth: 1}));
-    next();
-});
-
-// Require authorization for anything prefixed with /admin or /sqlite
-// app.get(["^\/admin\/\/*","^\/sqlite\/\/*"], PassportAuthenticateMiddleware, function (req, res, next) {
-app.get(["/sqlite*","/admin*"], function (req, res, next) {
-    console.log("Check for Auth...");
-    var hostname = "localhost";
-
-    if (((typeof req) == "object") && ((typeof req.headers) == "object") && ((typeof req.headers['x-forwarded-host']) == "string")) {
-        hostname = req.headers['x-forwarded-host'];
-    }
-    console.log("+" + req.method + " " + hostname + req.url);
-    gtid = req.authInfo.getZoneId()
-    console.log("tenantId: " + gtid);
-    // console.log(util.inspect(req.authInfo, {depth: 1}));
-    next();
-
-});
-
-// app user info
-app.get('/sqlite/info', function (req, res) {
-    if (req.authInfo.checkScope('$XSAPPNAME.User')) {
-        let info = {
-            'userInfo': req.user,
-            'subdomain': req.authInfo.getSubdomain(),
-            'tenantId': req.authInfo.getZoneId()
-        };
-        res.status(200).json(info);
-    } else {
-        res.status(403).send('Forbidden');
-    }
-});
-
-
-// destination reuse service
-// app.get('/sqlite/destinations', async function (req, res) {
-//     if (req.authInfo.checkScope('$XSAPPNAME.User')) {
-//         try {
-//             let res1 = await httpClient.executeHttpRequest(
-//                 {
-//                     destinationName: req.query.destination || '',
-//                     jwt: retrieveJwt(req)
-//                 },
-//                 {
-//                     method: 'GET',
-//                     url: req.query.path || '/'
-//                 }
-//             );
-//             res.status(200).json(res1.data);
-//         } catch (err) {
-//             console.log(err.stack);
-//             res.status(500).send(err.message);
-//         }
-//     } else {
-//         res.status(403).send('Forbidden');
-//     }
-// });
-
 //Setup Routes
-// var router = require("./router")(app, server);
+var router = require("./router")(app, server);
 
 // Set up a headless websocket server that prints any
 // events that come in.
@@ -558,7 +475,7 @@ server.on('upgrade', (request, socket, head) => {
     });
   });
 
-const port = process.env.PORT || 5003;
+const port = process.env.PORT || 8080;    // Start9 config desn't seem to allow setting PORT but needs to be 8080 for the reverse proxy to work
 // app.listen(port, function () {
 //     console.info('Listening on http://localhost:' + port);
 // });

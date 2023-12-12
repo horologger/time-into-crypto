@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head>
+    <meta charset="utf-8" />
+    <title>{{ title }}</title>
+
+    <!-- <script
+    src="https://unpkg.com/webln@0.3.2/dist/webln.min.js"
+    integrity="sha384-MpjpvOQqXz9nCoLUS/sR0bhLwGYuNPMOBN50jsqhnqAzDq0GiOI0u6oC5fHitzI2"
+    crossorigin="anonymous"
+    ></script> -->
+    <script src="webln.min.js"></script>
+
+    <script>
+
+    //import { requestProvider, MissingProviderError } from 'webln';
+
+    function existsWebLN() {
+        if (((typeof window.webln) == "object") && ((typeof window.webln.enabled) == "boolean")) {
+            document.getElementById("prereqs").style.display = "none";
+            document.getElementById("mainsection").style.display = "block";
+        }
+        else {
+            document.getElementById("prereqs").style.display = "block";
+            document.getElementById("mainsection").style.display = "none";
+        }
+    };
+
+    function genTrialID() {
+        document.getElementById("tenantid").value = genTrialTenantID();
+        if (checkNickAndTenantID()) {
+            document.getElementById("register").disabled = false;
+        } else {
+            document.getElementById("register").disabled = true;
+        }
+    }
+    var nickIsAvailable = false;
+
+    function nickbutton() {
+        document.getElementById("getnick").innerHTML = "Check Availability";
+        document.getElementById("register").disabled = true;
+    }
+
+    function checkNickAndTenantID() {
+        if ((checkForTenantID(document.getElementById("tenantid").value) && (nickIsAvailable))){
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    </script>
+
+    </head>
+    <body style="font-family: Tahoma, Geneva, sans-serif" onload="existsWebLN();">
+    <h1>{{ title}}</h1><br />
+
+    <div id="prereqs" style="disply:none">
+        <h3>Prerequisites</h3>
+        <p>
+            This Sign Up procedure requires that a Lightning Node Provider be installed. <br />
+            The <a href="https://getalby.com/" target="get_ext">Alby Browser Extension</a> is recommended. <br />
+            Install an extension and reload this page. <br />
+        </p>
+    </div>
+
+    <div id="mainsection">
+    <!-- <form id="signupform"> -->
+        <table id="signuptable" border=0>
+        <tr><td align="right">LN PubKey:</td><td><input type="text" id="lnpub" name="lnpub" readonly size="66" style="font-family: monospace;" placeholder="Click the button to Connect and Read your PubKey"></td><td><button id="getpubkey" onclick="testLN02()">Connect + Get PubKey</button></td></tr>
+        <tr><td align="right">Nickname:</td><td><input type="text" id="nick" name="nick" minlength="4" maxlength="20" size="20"  style="font-family: monospace;" placeholder="enter a nickname"onKeyDown="nickbutton()"> Doesn't have to be a real name.</td><td><button id="getnick" onclick="doCheckNick()">Check Availability</button></td></tr>
+        <!-- aef487d1-0879-4fb1-a8f4-2384b71226c2 -->
+        <tr><td align="right">Tenant ID:</td><td><input type="text" id="tenantid" name="tenantid" size="51" style="font-family: monospace;" placeholder="On BTP, TenantID is found on Subaccount Overview">&nbsp;<button id="gentrialid" align="right" onclick="genTrialID()">Generate Trial ID</button></td><td><button id="register" disabled onclick="doRegister()">Register</button></td></tr>
+        <tr id="secretrows1" style="display:none"><td align="right">Client ID:</td><td><input type="text" id="clientid" name="clientid" size="51" style="font-family: monospace;" placeholder="Client ID">&nbsp;</td><td>&nbsp;</td></tr>
+        <tr id="secretrows2" style="display:none"><td align="right">Client Secret:</td><td><input type="text" id="clientsecret" name="clientsecret" size="51" style="font-family: monospace;" placeholder="Client Secret">&nbsp;</td><td>&nbsp;</td></tr>
+        <tr id="secretrows3" style="display:none"><td align="right">Payment Chat:</td><td><a href="/rates/chat?tenantid=" id="paymentchat" target="paymentchat">/rates/chat?tenantid=</a></td><td>&nbsp;</td></tr>
+        </table>
+        <textarea rows="1" cols="72" id="message"></textarea>
+        <button type="submit" id="send">Return Key to Send</button>
+        <br />
+        <textarea rows="7" cols="80" id="logger"></textarea>
+        <br />
+        <textarea rows="5" cols="80" id="invoice">No Invoice Yet!</textarea>
+        <br />
+    <!-- </form> -->
+
+    <button id="test01" onclick="testLN01()">Test 01</button>
+    <button id="test02" onclick="testLN02()">Test 02 : GetInfo</button>
+    <button id="test03" onclick="testLN03()">Test 03 : MakeInvoice</button>
+    <button id="test04" onclick="testLN04()">Test 04 : SendPayment</button>
+    <button id="test05" onclick="testLN05()">Test 05 : SignMessage</button>
+    <button id="test06" onclick="testLN06()">Test 06 : VerifyMessage</button>
+
+    <ul id="chat"></ul>
+
+    <ul id="webln">Press Test 01 for current time.</ul>
+
+    </div>
+
+    <script>
+    var input = document.getElementById("message");
+    input.addEventListener("keypress", function(event) {
+    if (event.key === "Enter") {
+        event.preventDefault();
+        document.getElementById("send").click();
+    }
+    });
+
+    </script>
+
+    <script src="webln_handlers.js"></script>
+
+    <script>
+
+    function doLog(message) {
+
+        var logger = document.querySelector("#logger");
+        logger.innerHTML = logger.innerHTML + "\n" + message;
+        logger.scrollTop = logger.scrollHeight;
+
+    }
+
+
+    async function check4WebLN() {
+        var exists = false;
+        console.log("Checking for WebLN");
+        try {
+            const webln = await WebLN.requestProvider();
+            exists = true;
+        }
+        catch(err) {
+            if (err == WebLN.MissingProviderError) {
+                exists = false;
+            }
+            else {
+                console.log("WebLN Error: " + err);
+            }
+        }
+        return exists;
+    }
+
+    document.getElementById("prereqs").style.display = "none";
+    // document.getElementById("mainsection").style.display = "none";
+    document.getElementById("mainsection").style.display = "none";
+
+    function doCheckNick()
+    {
+
+        var pathAndParams = '{{base}}/getNick' + '?' + '{{params}}';
+
+        xhr = new XMLHttpRequest();
+        xhr.open('POST', pathAndParams);
+
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.setRequestHeader("Accept", "application/json");
+
+        var request_obj = { 
+            "nick": document.getElementById("nick").value
+        };
+
+        document.getElementById("getnick").innerHTML = "Checking";
+
+        xhr.onload = function() {
+            
+            if (xhr.status == 200) {
+                // document.getElementById("response_content").innerHTML = "<pre>\n" + dumpResponseHeaders(xhr) + "Response Body: \n" + JSON.stringify(JSON.parse(xhr.responseText), null, 2) + "</pre>\n";
+
+                var isJsonBody = false;
+                var headers = xhr.getAllResponseHeaders();
+                const hdrs = headers.split('\r\n');
+                hdrs.forEach(function(hdr){
+                    var parts = hdr.split(':');
+                    if (parts[0] == "content-type") {
+                        var bits = parts[1].split(';');
+                        if (bits[0].trim() == "application/json") {
+                            isJsonBody = true;
+                        }
+                    }
+                });
+
+                if (isJsonBody) {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.result) {
+                        document.getElementById("getnick").innerHTML = "Taken, try again.";
+                        nickIsAvailable = false;
+                    } else {
+                        document.getElementById("getnick").innerHTML = "Available";
+                        nickIsAvailable = true;
+                        if (checkNickAndTenantID()) {
+                            document.getElementById("register").disabled = false;
+                        } else {
+                            document.getElementById("register").disabled = true;
+                        }
+                    }
+                }
+            }
+            else {
+                document.getElementById("getnick").innerHTML = "Unexpected";
+            }
+        };
+
+        //xhr.send(Object.keys(request_obj).map(key => encodeURIComponent(key) + '=' + encodeURIComponent(request_obj[key])).join('&'));
+        xhr.send(JSON.stringify(request_obj));
+
+    }
+
+    function doRegister()
+    {
+
+        var pathAndParams = '{{base}}/tenant' + '?' + '{{params}}';
+
+        xhr = new XMLHttpRequest();
+        xhr.open('POST', pathAndParams);
+
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.setRequestHeader("Accept", "application/json");
+
+        var request_obj = { 
+            "pubkey": document.getElementById("lnpub").value,
+            "nick": document.getElementById("nick").value,
+            "tenant": document.getElementById("tenantid").value
+        };
+
+        document.getElementById("register").innerHTML = "Registering";
+
+        xhr.onload = function() {
+            
+            if (xhr.status == 200) {
+                // document.getElementById("response_content").innerHTML = "<pre>\n" + dumpResponseHeaders(xhr) + "Response Body: \n" + JSON.stringify(JSON.parse(xhr.responseText), null, 2) + "</pre>\n";
+
+                var isJsonBody = false;
+                var headers = xhr.getAllResponseHeaders();
+                const hdrs = headers.split('\r\n');
+                hdrs.forEach(function(hdr){
+                    var parts = hdr.split(':');
+                    if (parts[0] == "content-type") {
+                        var bits = parts[1].split(';');
+                        if (bits[0].trim() == "application/json") {
+                            isJsonBody = true;
+                        }
+                    }
+                });
+
+                if (isJsonBody) {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.status == "exists") {
+                        document.getElementById("register").innerHTML = "Already Registered";
+                    } else {
+                        if (response.status == "registered") {
+                            document.getElementById("register").innerHTML = "Registered";
+                            
+                            document.getElementById("clientid").value = response.credentials.uaa.clientid;
+                            document.getElementById("clientsecret").value = response.credentials.uaa.clientsecret;
+                            document.getElementById("paymentchat").href = "/rates/chat?tenantid=" + response.credentials.uaa.clientid;
+                            document.getElementById("paymentchat").innerHTML = "/rates/chat?tenantid=" + response.credentials.uaa.clientid;
+
+
+                            document.getElementById("secretrows1").style.display = '';
+                            document.getElementById("secretrows2").style.display = '';
+                            document.getElementById("secretrows3").style.display = '';
+
+                            doLog(JSON.stringify(response,null,2));
+                        } else {
+                            document.getElementById("register").innerHTML = "KaPut";
+                        }
+                    }
+                }
+            }
+            else {
+                document.getElementById("getnick").innerHTML = "Unexpected";
+            }
+        };
+
+        //xhr.send(Object.keys(request_obj).map(key => encodeURIComponent(key) + '=' + encodeURIComponent(request_obj[key])).join('&'));
+        xhr.send(JSON.stringify(request_obj));
+
+    }
+
+    document.getElementById("tenantid").addEventListener('input', (event) => {
+        if (checkNickAndTenantID()) {
+            document.getElementById("register").disabled = false;
+        } else {
+            document.getElementById("register").disabled = true;
+        }
+    });
+
+    </script>
+
+    <script src="util.js"></script>
+
+    </body>
+</html> 

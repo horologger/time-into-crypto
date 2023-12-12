@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Load Remote Content via AJAX</title>
+    <!-- Include JQuery Library -->
+    <script src="jquery.min.js"></script>
+    <script type="text/javascript">
+    $(document).ready(function(){
+        $('#content1').load('/admin/links');
+        $('#content2').load('/rates/links');
+    });
+    </script>
+</head>
+<body>
+    <div id="content1"></div>
+    <div id="content2"></div>
+</body>
+</html>

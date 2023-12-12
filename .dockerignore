@@ -7,3 +7,4 @@ default-env.json
 .yo-rc.json
 .vscode/
 .DS_Store
+scripts.thunder/

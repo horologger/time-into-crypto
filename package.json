@@ -24,7 +24,7 @@
         "fast-xml-parser": "latest"
     },
     "scripts": {
-        "debug": "nodemon -e js,njk server.js",
+        "debug": "nodemon -e js,njk,html server.js",
         "start": "node server.js"
     }
 }

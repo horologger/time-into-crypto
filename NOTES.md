@@ -1,6 +1,10 @@
 Inspired by https://github.com/jensgertsen/sparkkiosk
 ```sh
 docker buildx build --platform linux/arm64,linux/amd64 --tag horologger/timeintocrypto:v0.0.0 --output "type=registry" .
+
+
+docker buildx build --platform linux/arm64 --tag horologger/timeintocrypto:v0.0.0 --load .
+
 ```
 
 On UmbrelPi
