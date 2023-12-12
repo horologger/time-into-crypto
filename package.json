@@ -1,5 +1,5 @@
 {
-    "name": "timeintocrypto",
+    "name": "time-into-crypto",
     "dependencies": {
         "express": "latest",
         "express-session": "*",

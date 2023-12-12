@@ -5,3 +5,4 @@ db.sql
 .vscode/
 data/
 docker-images/
+*.s9pk

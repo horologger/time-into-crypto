@@ -1,9 +1,9 @@
 Inspired by https://github.com/jensgertsen/sparkkiosk
 ```sh
-docker buildx build --platform linux/arm64,linux/amd64 --tag horologger/timeintocrypto:v0.0.0 --output "type=registry" .
+docker buildx build --platform linux/arm64,linux/amd64 --tag horologger/time-into-crypto:v0.0.0 --output "type=registry" .
 
 
-docker buildx build --platform linux/arm64 --tag horologger/timeintocrypto:v0.0.0 --load .
+docker buildx build --platform linux/arm64 --tag horologger/time-into-crypto:v0.0.0 --load .
 
 ```
 
@@ -26,16 +26,16 @@ LND_GRPC_MACAROON=/lnd/data/chain/bitcoin/mainnet/admin.macaroon
 LND_GRPC_PORT=10009
 
 sudo ./umbrel/scripts/repo checkout https://github.com/horologger/umbrelappstore.git
-sudo ./umbrel/scripts/app install isviable-timeintocrypto
-sudo ./umbrel/scripts/app start isviable-timeintocrypto
-sudo ./umbrel/scripts/app restart isviable-timeintocrypto
+sudo ./umbrel/scripts/app install isviable-time-into-crypto
+sudo ./umbrel/scripts/app start isviable-time-into-crypto
+sudo ./umbrel/scripts/app restart isviable-time-into-crypto
 
 ```
 On Zilla
 ```sh
 su - alunde
-docker pull horologger/timeintocrypto:v0.0.0
-mkdir -p ~/.timeintocrypto/data
+docker pull horologger/time-into-crypto:v0.0.0
+mkdir -p ~/.time-into-crypto/data
 ```
 First run
 ```
@@ -43,15 +43,15 @@ docker run \
 -e PORT=21284 \
 -v data:/data \
 -p 21284:21284 \
---name timeintocrypto \
--it horologger/timeintocrypto:v0.0.0 
+--name time-into-crypto \
+-it horologger/time-into-crypto:v0.0.0 
 ```
 
 On Ragnar
 ```sh
 su - alunde
-docker pull horologger/timeintocrypto:v0.0.0
-mkdir -p ~/.timeintocrypto/data
+docker pull horologger/time-into-crypto:v0.0.0
+mkdir -p ~/.time-into-crypto/data
 ```
 First run
 ```
@@ -61,11 +61,11 @@ docker run \
 -e LND_GRPC_CERT=/lnd/tls.cert \
 -e LND_GRPC_ENDPOINT=localhost \
 -e LND_GRPC_PORT=9735 \
--v /home/alunde/timeintocrypto/data:/data \
+-v /home/alunde/time-into-crypto/data:/data \
 -v /t4/lnd:/lnd:ro \
 -p 21284:21284 \
---name timeintocrypto \
--it horologger/timeintocrypto:v0.0.0 
+--name time-into-crypto \
+-it horologger/time-into-crypto:v0.0.0 
 ```
 Subsequent runs
 ```sh
@@ -75,18 +75,18 @@ docker run \
 -e LND_GRPC_CERT=/lnd/tls.cert \
 -e LND_GRPC_ENDPOINT=127.0.0.1 \
 -e LND_GRPC_PORT=10009 \
--v /home/alunde/timeintocrypto/data:/data \
+-v /home/alunde/time-into-crypto/data:/data \
 -v /t4/lnd:/lnd:ro \
 -p 21284:21284 \
--it horologger/timeintocrypto:v0.0.0 
+-it horologger/time-into-crypto:v0.0.0 
 
 ```
 Inspect
 ```sh
-docker exec -it timeintocrypto /bin/bash
+docker exec -it time-into-crypto /bin/bash
 ```
 Clean up
 ```sh
-docker stop timeintocrypto
-docker rm timeintocrypto
+docker stop time-into-crypto
+docker rm time-into-crypto
 ```
