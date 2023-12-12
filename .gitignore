@@ -6,3 +6,4 @@ db.sql
 data/
 docker-images/
 *.s9pk
+scripts/embassy.js
