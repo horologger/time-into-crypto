@@ -8,3 +8,5 @@ default-env.json
 .vscode/
 .DS_Store
 scripts.thunder/
+docker-images/
+*.s9pk
