@@ -70,14 +70,13 @@ docker run \
 Subsequent runs
 ```sh
 docker run \
--e APP_PASSWORD=TimeInto \
--e LND_GRPC_MACAROON=invoice.macaroon \
--e LND_GRPC_CERT=/lnd/tls.cert \
--e LND_GRPC_ENDPOINT=127.0.0.1 \
--e LND_GRPC_PORT=10009 \
--v /home/alunde/time-into-crypto/data:/data \
--v /t4/lnd:/lnd:ro \
--p 21284:21284 \
+-e LND_ADDRESS=ragnar:10009 \
+-e LND_CERT_FILE="/lnd/tls.cert" \
+-e LND_MACAROON_FILE="/lnd/data/chain/bitcoin/mainnet/admin.macaroon" \
+-e DATABASE_URI="/data/time-into-crypto.db" \
+-v data:/data \
+-v lnd-data:/lnd:ro \
+-p 8080:8080 \
 -it horologger/time-into-crypto:v0.0.1 
 
 ```

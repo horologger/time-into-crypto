@@ -7,3 +7,4 @@ data/
 docker-images/
 *.s9pk
 scripts/embassy.js
+lnd-data/
