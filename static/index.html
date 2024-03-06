@@ -4,6 +4,18 @@
     <meta charset="utf-8" />
     <title>Web Socket Demo</title>
     <script>
+    function log(message)
+    {
+        console.log(message);
+        var loggdiv = document.getElementById("logger");
+        if (loggdiv) {
+            loggdiv.innerHTML = loggdiv.innerHTML + "\n" + message;
+            loggdiv.scrollTop = loggdiv.scrollHeight;
+        }
+    }
+    </script>
+
+    <script>
     (function () {
         var onWindowLoad = function () {
             
@@ -52,7 +64,7 @@
         xhr.setRequestHeader("Accept", "application/json");
 
         var request_obj = { 
-            "pubkey": document.getElementById("pubkey").value
+            "pubkey": document.getElementById("lnpubkey-field").value
         };
 
         xhr.onload = function() {
@@ -74,7 +86,7 @@
 
                 if (isJsonBody) {
                     var response = JSON.parse(xhr.responseText);
-                    console.log(response);
+                    log(response);
                     document.getElementById("nick").value = response.nick;
                     // if (window.location.href.search("tenantid") < 0) {
                     //     window.location.href = window.location.href + "?tenantid=" + response.tenant;
@@ -90,35 +102,241 @@
 
     }
 
-    async function asyncGetPubKey(req, res) {
+    async function getLNPubKey(req, res) {
         try {
-            const webln = await WebLN.requestProvider();
-            const info = await webln.getInfo();
-            document.getElementById("pubkey").value = info.node.pubkey;
+            // const webln = await WebLN.requestProvider();
+            const info = await window.webln.getInfo();
+            if (typeof info.node.pubkey == 'undefined') {
+                document.getElementById("lnpubkey-field").value = "Alby accounts do not have a pubkey.";
+            } else {
+                document.getElementById("lnpubkey-field").value = info.node.pubkey;
+            }
             document.getElementById("nick").value = info.node.alias;
-            doGetNick();
+            // doGetNick();
         }
         catch(err) {
             // Tell the user what went wrong
-            console.log(err.message);
+            log(err.message);
             alert(err.message);
         }
     };
 
+    async function enableWebLN() {
+        log("enabling WebLN");
+        await window.webln.enable();
+        log("WebLN enabled");
+        await getLNPubKey(null, null);
+        log("got LNPubKey");
+        await getNostrPubKey();
+        log("got NostrPubKey");
+        
+    };
+
     // https://github.com/getAlby/js-sdk
     function existsWebLN() {
-        if (((typeof window.webln) == "object") && ((typeof window.webln.enabled) == "boolean")) {
+        // if (((typeof window.webln) == "object") && ((typeof window.webln.enabled) == "boolean")) {
+        if (typeof window.webln !== 'undefined') {
             document.getElementById("prereqs").style.display = "none";
             document.getElementById("mainsection").style.display = "block";
-            asyncGetPubKey(null, null);
+            log("WebLN found");
+            (async function() {
+                await enableWebLN();
+            })();
         }
         else {
             document.getElementById("prereqs").style.display = "block";
             document.getElementById("mainsection").style.display = "none";
+            log("WebLN not found");
         }
     };
-    </script>
 
+    var nostrPubKey = "7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5";
+
+    var loc_href = "http://localhost:8080/?hpk=7bde...72a5&relay=wss://domas.io";   // urlencoded??
+    var loc_proto = "http:";
+    var loc_host = "localhost:8080";    // actually host:port
+    var loc_http = "http://localhost:8080";
+    var hpk = "7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5";
+    var relay = "wss://relay.getalby.com/v1"
+
+    function getHrefParts() {
+        log("getHrefParts");
+        loc_href = window.document.location.href;
+        log("loc_href: " + loc_href);
+        loc_proto = window.document.location.protocol;
+        log("loc_proto: " + loc_proto);
+        loc_host = window.document.location.host;
+        log("loc_host: " + loc_host);
+        loc_http = window.document.location.origin;
+        const queryString = window.location.search;
+        console.log(queryString);
+        const urlParams = new URLSearchParams(queryString);
+
+        if (urlParams.has('hpk')) {
+            hpk = urlParams.get('hpk');
+        }
+        log("hpk: " + hpk);
+
+        if (urlParams.has('relay')) {   // wss%3A%2F%2Frelay.getalby.com%2Fv1
+            relay = urlParams.get('relay');
+        }
+        log("relay: " + relay);
+
+        // if (loc_href.search("hpk") > 0) {
+        //     var sched_link = loc_http + "?hpk=" + nostrPubKey;
+        //     document.getElementById("schedule-link").href = sched_link;
+        //     document.getElementById("schedule-link").innerHTML = "My Schedule Link: " + sched_link;
+        //     if (hpk != nostrPubKey) {
+        //         document.getElementById("mode-button").innerHTML = "Mode: Guest";
+        //     } else {
+        //         document.getElementById("mode-button").innerHTML = "Mode: Host";
+        //     }
+        // }
+        // else {
+        //     loc_http = loc_href.split("?")[0];
+        //     log("loc_http: " + loc_http);
+        //     var sched_link = loc_http + "?hpk=" + nostrPubKey;
+        //     document.getElementById("schedule-link").href = sched_link;
+        //     document.getElementById("schedule-link").innerHTML = "My Schedule Link: " + sched_link;
+        //     document.getElementById("mode-button").innerHTML = "Mode: Host";
+        // }
+    }
+
+    getHrefParts();
+
+    function setScheduleLink() {
+        log("setScheduleLink");
+        var sched_link = loc_http + "/?hpk=" + nostrPubKey + "&relay=" + relay;
+            document.getElementById("schedule-link").href = sched_link;
+            document.getElementById("schedule-link").innerHTML = "My Schedule Link: " + sched_link;
+            if (hpk != nostrPubKey) {
+                document.getElementById("mode-button").innerHTML = "Mode: Guest";
+            } else {
+                document.getElementById("mode-button").innerHTML = "Mode: Host";
+            }
+    }
+
+    function switchMode() {
+        log("switchMode");
+    }
+
+    var connection = null;
+
+    function reconnect() {
+
+        connection = new WebSocket("ws://" + loc_host + "/");
+
+        connection.onopen = () => {
+            log("connected");
+            connection.send("1A37F239BC1");
+            document.getElementById("conn-status").style.backgroundColor = "#32d40d";   // green
+        };
+
+        connection.onclose = () => {
+            console.error("disconnected");
+            document.getElementById("conn-status").style.backgroundColor = "#d40d1e";   // red
+        };
+
+        connection.onerror = error => {
+            console.error("failed to connect", error);
+        };
+
+        connection.onmessage = event => {
+            // log("received", event.data);
+
+            // let li = document.createElement("li");
+            // li.innerText = event.data;
+            // document.querySelector("#chat").append(li);
+            // let nick = document.querySelector("#nick").value;
+            
+            // Attempt to parse as JSON
+            try {
+                var json = JSON.parse(event.data);
+                if (json.type == "invoice") {
+                        log("Invoice Sent!");
+                        document.getElementById("invoice").innerHTML = json.invoice;
+                        testLN04();
+                } else {
+                    // log(event.data);
+
+                    // var logger = document.querySelector("#logger");
+                    // logger.innerHTML = logger.innerHTML + "\n" + event.data;
+                    // logger.scrollTop = logger.scrollHeight;
+                }
+                return;
+            } catch (e) {
+                log("not json");
+            }
+
+
+        /*
+            if (event.data.substring(2,7) == ":INV:") {
+                if (event.data.substring(0,2) == nick) {
+                    alert("Invoice Sent!");
+                } else {
+                    var invoice = event.data.substring(7);
+                    document.getElementById("invoice").innerHTML = invoice;
+                }
+            } else {
+                var logger = document.querySelector("#logger");
+                logger.innerHTML = logger.innerHTML + "\n" + event.data;
+                logger.scrollTop = logger.scrollHeight;
+            }
+        */
+
+        };
+
+        // document.querySelector("form").addEventListener("submit", event => {
+        //     event.preventDefault();
+        //     let nick = document.querySelector("#nick").value;
+        //     let message = document.querySelector("#message").value;
+        //     connection.send(nick + ":" + message);
+        //     document.querySelector("#message").value = "";
+        // });
+
+        if (document.getElementById('reconnect')) {
+            document.getElementById('reconnect').style.visibility = 'hidden';
+        } 
+        
+        if (document.getElementById('disconnect')) {
+            document.getElementById('disconnect').style.visibility = 'visible';
+        }
+    };
+
+    function disconnect() {
+        log("disconnecting...");
+        connection.close();
+        document.getElementById('reconnect').style.visibility = 'visible';
+        document.getElementById('disconnect').style.visibility = 'hidden';
+    };
+
+    // document.getElementById('message').onkeydown = function(e){
+    //     if(e.keyCode == 13){
+    //         //log("enter key...");
+    //         // let addr = document.querySelector("#addr").value;
+    //         // let message = document.querySelector("#message").value;
+    //         // connection.send(nick + ":" + message);
+    //         // document.querySelector("#message").value = "";
+    //     } else {
+    //         //log("other key...");
+    //     }
+    // };
+
+    reconnect();
+
+
+    </script>
+    <script type="module">
+        // import {launchModal} from 'https://esm.sh/@getalby/bitcoin-connect@3.2.0?bundle-deps'; // jsdelivr.net, skypack.dev also work
+        // import {launchModal} from 'bitcoin-connect/bitcoin-connect.js'; // local
+    
+        // use Bitcoin connect API normally...
+        // launchModal();
+    
+        // or if you just want access to the web components:
+        // import 'https://esm.sh/@getalby/bitcoin-connect@3.2.0';
+    </script>
+  
     </head>
     <body style="font-family: Tahoma, Geneva, sans-serif" onload="existsWebLN();">
 
@@ -128,7 +346,10 @@
     // document.getElementById("mainsection").style.display = "none";
 
     </script>
-
+    <!-- <div id="conn-status" style="background-color: #32d40d; position: fixed; top: 0; left: 0; width: 100%; height: 4px;"></div> -->
+    <!-- <div id="conn-status" style="background-color: #d40d1e; position: fixed; top: 0; left: 0; width: 100%; height: 4px;"></div> -->
+    <!-- <div id="conn-status" style="background-color: #eae30c; position: fixed; top: 0; left: 0; width: 100%; height: 4px;"></div> -->
+    <div id="conn-status" style="background-color: #e6e6e6; position: fixed; top: 0; left: 0; width: 100%; height: 4px;"></div>
     <div id="prereqs">
         <h3>Prerequisites</h3>
         <p>
@@ -150,7 +371,12 @@
 
     <!-- <button id="onboard">Loading...</button> <div id="chainlist" style="display: inline">Add a Theta network to your MetaMask with <a href="https://chainlist.org/?search=theta" target="chainlist">ChainList</a></div><br /> -->
     <!-- <textarea rows="1" cols="80" id="nick"></textarea> -->
-    Nickname: <input type="text" id="nick" size="14" style="font-family: monospace" onInput="showCurrentValue(event)" /> PubKey: <input type="text" id="pubkey" size="42" style="font-family: monospace" />
+    <table border="0" cellspacing="1" cellpadding="0">
+        <!-- <tr><th align="right">Name</th><th>Description</th></tr> -->
+        <tr><td align="right">Nick:</td><td><input type="text" id="nick" size="14" style="font-family: monospace" onInput="showCurrentValue(event)" /></td></tr>
+        <tr><td align="right">LNPubKey:</td><td><input type="text" id="lnpubkey-field" size="66" style="font-family: monospace" /></td></tr>
+        <tr><td align="right">NostrPubKey:</td><td><input type="text" id="nostrpubkey-field" size="66" style="font-family: monospace" /></td></tr>
+    </table>
     <!-- <input cols="80" id="nick"></input> -->
     <form id="chatform">
         <textarea rows="1" cols="72" id="message"></textarea>
@@ -176,17 +402,20 @@
     <button id="test05" onclick="testLN05()">Test 05 : SignMessage</button>
     <button id="test06" onclick="testLN06()">Test 06 : VerifyMessage</button>
 
+    <br />
+
+    <button id="mode-button" onclick="switchMode()">Mode: Unknown</button> <a id="schedule-link" href="http://localhost:8080/?hpk=7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5&relay=wss%3A%2F%2Frelay.getalby.com%2Fv1">Schedule Link: http://localhost:8080/?hpk=7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5&relay=wss://relay.getalby.com/v1</a>
+
     <ul id="chat"></ul>
 
     </div>
 
     <!-- <script src="main.js?tenantid={{tenantid}}"></script> -->
-    <script src="common.js"></script>
-    <script
+    <!-- <script
     src="https://unpkg.com/webln@0.3.2/dist/webln.min.js"
     integrity="sha384-MpjpvOQqXz9nCoLUS/sR0bhLwGYuNPMOBN50jsqhnqAzDq0GiOI0u6oC5fHitzI2"
     crossorigin="anonymous"
-    ></script>
+    ></script> -->
 
     <script>
     var input = document.getElementById("message");
@@ -229,14 +458,52 @@
     </script>
 
     <script src="webln_handlers.js"></script>
+    
 
     <!-- <script src="metamask-onboarding.bundle.js"></script> -->
     <!-- <script src="metamask-onboarding.js"></script> -->
     <!-- <script>updateButton();</script> -->
 
+    <script>
+        // https://guides.getalby.com/developer-guide/v/alby-browser-extension-apis/
+        async function getNostrPubKey() {
+            nostrPubKey = await window.nostr.getPublicKey();
+            // Your code here
+            log("NostrPubKey: " + nostrPubKey);
+            document.getElementById("nostrpubkey-field").value = nostrPubKey;
+            setScheduleLink();
+        }
+
+        function accountChangedHandler() {
+            // log("Account Changed!");
+
+            (async function() {
+                await getNostrPubKey();
+            })();
+            (async function() {
+                await getLNPubKey(null, null);
+            })();
+        }
+
+        if (!nostr.on) { alert('nostr not supported'); }
+        else { 
+            log('nostr supported'); 
+            nostr.on("accountChanged", accountChangedHandler); // callback is executed once account is changed in provided with multiple accounts
+        }
+
+    </script>
     <ul id="webln">Nothing Yet!</ul>
 
+    <!-- Bitcoin Connect components are now available -->
+    <bc-button></bc-button>
 
+    <script>
+        function myTimer() {
+            const d = new Date();
+            document.getElementById("demo").innerHTML = d.toLocaleTimeString();
+        };
+    </script>
+    
 
     </body>
 </html>

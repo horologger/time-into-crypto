@@ -11,3 +11,11 @@ function showCurrentValue(event)
     let addr = document.querySelector("#addr").value;
     connection.send(addr + ":cmd:setnick:" + value);
 };
+
+function log(message)
+{
+    console.log(message);
+    var loggdiv = document.getElementById("logger");
+    loggdiv.innerHTML = loggdiv.innerHTML + "\n" + message;
+    loggdiv.scrollTop = loggdiv.scrollHeight;
+}

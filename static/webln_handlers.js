@@ -15,7 +15,7 @@ async function asyncLN02(req, res) {
 
     doLog(msg);
     try {
-        const webln = await WebLN.requestProvider();
+        // const webln = await WebLN.requestProvider();
         msg = "Got reqProv..."; document.getElementById("webln").innerHTML = msg; doLog(msg);
         const info = await webln.getInfo();
         console.log("Info.alias: " + info.node.alias);
@@ -67,7 +67,7 @@ function testLN03() {
 async function asyncLN04(req, res) {
     document.getElementById("webln").innerHTML = "Starting...";
     try {
-        const webln = await WebLN.requestProvider();
+        // const webln = await WebLN.requestProvider();
         document.getElementById("webln").innerHTML = "Got reqProv...";
         // let nick = document.querySelector("#nick").value;
         // let invoice = document.getElementById("invoice").innerHTML;
@@ -95,7 +95,7 @@ function testLN04() {
 async function asyncLN05(req, res) {
     document.getElementById("webln").innerHTML = "Starting...";
     try {
-        const webln = await WebLN.requestProvider();
+        // const webln = await WebLN.requestProvider();
         document.getElementById("webln").innerHTML = "Got reqProv...";
         let message = document.querySelector("#message").value;
         if (message.length > 0) {
@@ -124,7 +124,7 @@ function testLN05() {
 async function asyncLN06(req, res) {
     document.getElementById("webln").innerHTML = "Starting...";
     try {
-        const webln = await WebLN.requestProvider();
+        // const webln = await WebLN.requestProvider();
         document.getElementById("webln").innerHTML = "Got reqProv...";
         let message = document.querySelector("#message");
         let invoice = document.querySelector("#invoice");

@@ -17,12 +17,24 @@ const {authenticatedLndGrpc} = require('ln-service');
 // const {createInvoice} = require('ln-service');
 
 // Edit /Users/i830671/.bos/ragnar/credentials.json etc.
+// # export RELAY="wss://atl.purplerelay.com"
+// # export LN_BACKEND_TYPE="LND"            #ALBY or LND
+// # export LND_ADDRESS="ragnar:10009"       #the LND gRPC address, eg. localhost:10009 (used with the LND backend)
+// # export LND_CERT_FILE="lnd-data/tls.cert"    #the location where LND's tls.cert file can be found (used with the LND backend)
+// # export LND_MACAROON_FILE_FILE="lnd-data/data/chain/bitcoin/mainnet/admin.macaroon" #the location where LND's admin.macaroon file can be found (used with the LND backend)
+// # export DATABASE_URI="/data/time-into-crypto.db" #a postgres connection string or sqlite filename. Default='blah' #nostr-wallet-connect.db (sqlite)
+// # export PORT=8080 #the port on which the app should listen on (default='blah' #8080)
 
-var cert = process.env[`LND_TLS_CERT`];       // export LND_TLS_CERT=$(cat ~/.bos/ragnar/credentials.json | jq -r '.cert')
-var macaroon = process.env[`LND_MACAROON`];   // export LND_MACAROON=$(cat ~/.bos/ragnar/credentials.json | jq -r '.macaroon')
-var socket = process.env[`LND_GRPC_SOCKET`];    // export LND_GRPC_SOCKET=$(cat ~/.bos/ragnar/credentials.json | jq -r '.socket')
-var lnd_grpc_host = process.env[`LND_GRPC_HOST`];   // docker -e 
-var lnd_grpc_port = process.env[`LND_GRPC_PORT`];   // docker -e 
+
+var nwc_relay = process.env[`RELAY`]; 
+var cert = process.env[`LND_CERT_FILE`];       
+var macaroon = process.env[`LND_MACAROON_FILE`];
+var socket = process.env[`LND_ADDRESS`];
+
+console.log("nwc_relay: " + nwc_relay);
+console.log("cert: " + cert);
+console.log("macaroon: " + macaroon);
+console.log("socket: " + socket);
 
 const homedir = process.env[`HOME`];
 var bosnode = process.env[`BOS_DEFAULT_SAVED_NODE`];
@@ -104,7 +116,7 @@ if (attempt_to_connect_to_lnd_on_startup) {
         console.log("macaroon: " + shortenString(macaroon));
         console.log("socket: " + socket);
     } else {
-        console.log("Either export LND_TLS_CERT, LND_MACAROON and LND_GRPC_SOCKET (host:port) -OR- The method described at https://github.com/andrewlunde/balanceofsatoshis#saved-nodes");
+        console.log("Either export LND_CERT_FILE, LND_MACAROON_FILE and LND_ADDRESS (host:port) -OR- The method described at https://github.com/andrewlunde/balanceofsatoshis#saved-nodes");
         process.exit(1);
     }
 } else {
@@ -113,9 +125,9 @@ if (attempt_to_connect_to_lnd_on_startup) {
 
 // console.log(boscreds);
 
-// echo $LND_TLS_CERT
-// echo $LND_MACAROON
-// echo $LND_GRPC_SOCKET
+// echo $LND_CERT_FILE
+// echo $LND_MACAROON_FILE
+// echo $LND_ADDRESS
 
 // lncli --rpcserver=IP_ADDRESS:GRPC_PORT --tlscertpath=./../tls.cert --macaroonpath=./../admin.macaroon
 

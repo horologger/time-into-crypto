@@ -1,10 +1,7 @@
-node-modules/
+node_modules/
 docker_build.txt
 noter.txt
 db.sql
 .vscode/
 data/
-docker-images/
-*.s9pk
-scripts/embassy.js
-lnd-data/
+.DS_Store

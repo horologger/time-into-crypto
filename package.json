@@ -21,7 +21,9 @@
         "moment": "^2.10.3",
         "ln-service": "latest",
         "kraken-api": "latest",
-        "fast-xml-parser": "latest"
+        "fast-xml-parser": "latest",
+        "@getalby/sdk": "latest",
+        "@getalby/bitcoin-connect": "latest"  
     },
     "scripts": {
         "debug": "nodemon -e js,njk,html server.js",
