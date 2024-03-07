@@ -150,7 +150,7 @@
         }
     };
 
-    var nostrPubKey = "7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5";
+    var nostrPubKey = "unknown";
 
     var loc_href = "http://localhost:8080/?hpk=7bde...72a5&relay=wss://domas.io";   // urlencoded??
     var loc_proto = "http:";
@@ -174,7 +174,10 @@
 
         if (urlParams.has('hpk')) {
             hpk = urlParams.get('hpk');
+        } else {
+            hpk = nostrPubKey;
         }
+
         log("hpk: " + hpk);
 
         if (urlParams.has('relay')) {   // wss%3A%2F%2Frelay.getalby.com%2Fv1
@@ -225,11 +228,16 @@
 
     function reconnect() {
 
-        connection = new WebSocket("ws://" + loc_host + "/");
+        var wsproto = "wss:";
+        if (loc_proto == "http:") {
+            wsproto = "ws:";
+        }
+        connection = new WebSocket(wsproto + "//" + loc_host + "/?" + "shpk=" + hpk + "&" + "rhpk=" + nostrPubKey);
 
         connection.onopen = () => {
             log("connected");
-            connection.send("1A37F239BC1");
+            // connection.send("1A37F239BC1");
+            connection.send(JSON.stringify({action: "info", hpk: nostrPubKey}));
             document.getElementById("conn-status").style.backgroundColor = "#32d40d";   // green
         };
 
@@ -396,7 +404,7 @@
     <button id="disconnect" onclick="disconnect()">Disconnect</button>
     <button id="reconnect" onclick="reconnect()" style="visibility: hidden">Connect</button>
 
-    <button id="test01" onclick="testLN01()">Test 01</button>
+    <button id="test01" onclick="doTestWS01()">Test 01</button>
     <button id="test02" onclick="testLN02()">Test 02 : GetInfo</button>
     <button id="test03" onclick="testLN03()">Test 03 : MakeInvoice</button>
     <button id="test04" onclick="testLN04()">Test 04 : SendPayment</button>
@@ -405,7 +413,7 @@
 
     <br />
 
-    <button id="mode-button" onclick="switchMode()">Mode: Unknown</button> <a id="schedule-link" href="http://localhost:8080/?hpk=7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5&relay=wss%3A%2F%2Frelay.primal.net">Schedule Link: http://localhost:8080/?hpk=7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5&relay=wss://relay.primal.net</a>
+    <button id="mode-button" onclick="switchMode()">Mode: Unknown</button> <a id="schedule-link" href="http://localhost:8080/?hpk=unknown&relay=wss%3A%2F%2Frelay.primal.net">Schedule Link: http://localhost:8080/?hpk=unknown&relay=wss://relay.primal.net</a>
 
     <ul id="chat"></ul>
 
@@ -473,6 +481,7 @@
             // Your code here
             log("NostrPubKey: " + nostrPubKey);
             document.getElementById("nostrpubkey-field").value = nostrPubKey;
+            getHrefParts();
             setScheduleLink();
             if ((typeof npk) != "undefined") {
                 if (npk != nostrPubKey) {
@@ -483,6 +492,7 @@
                 }
             }
 
+            
             if (hpk != nostrPubKey) {
                 dm = await makeDMto("This is a secret " + Math.floor(Math.random() * 100), hpk); // to Receiver
             }
@@ -490,6 +500,9 @@
             // dm = await makeDMto("This is a secret to vacuum8 " + Math.floor(Math.random() * 10), "7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5"); // to Vacuum8
             
             // ev = await makeEVto("This is a public message");
+
+            disconnect();
+            reconnect();
         }
 
         function accountChangedHandler() {
@@ -501,12 +514,36 @@
             (async function() {
                 await getLNPubKey(null, null);
             })();
+            setScheduleLink();
+            getHrefParts();
         }
 
-        if (!nostr.on) { alert('nostr not supported'); }
-        else { 
+        if ((typeof nostr != 'undefined') && (nostr.on)) { 
             log('nostr supported'); 
             nostr.on("accountChanged", accountChangedHandler); // callback is executed once account is changed in provided with multiple accounts
+        } else {
+            log('nostr not supported'); 
+        }
+
+        function doTestWS01() {
+            log("doTestWS01");
+            (async function() {
+                await testWS01();
+            })();
+        }
+
+        async function testWS01() {
+            log("testWS01");
+            var ev = {};
+            ev = await makeEVto("Cool test message");
+
+            const eventTask = {
+                action: "post",
+                relay: "wss://relay.primal.net",
+                event: ev
+            }
+
+            connection.send(JSON.stringify(eventTask));
         }
 
         async function makeEVto(msg) {
@@ -520,7 +557,7 @@
             // log("makeEVto: " + JSON.stringify(signedevt, null, 2));
             // log("makeEVto: " + JSON.stringify(signedevt));
             log("echo '" + JSON.stringify(signedevt) + "' | nak event wss://relay.primal.net");
-            return event;
+            return signedevt;
         }
 
         async function makeDMto(msg, pubkey) {
@@ -539,7 +576,7 @@
 
 
     </script>
-    <ul id="webln">Nothing Yet!</ul>
+    <ul id="webln-div">Nothing Yet!</ul>
 
     <!-- Bitcoin Connect components are now available -->
     <bc-button></bc-button>

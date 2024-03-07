@@ -283,17 +283,35 @@ gsocket = {};
 wsServer.on('connection', (socket, req) => {
     gsocket = socket;
     console.log('New Client Joining...');
+    console.log(req.url);
     const searchParams = new URLSearchParams(req.url);
     console.log(searchParams.getAll("tenantid"));
     console.log('token: ' + JSON.stringify(req.url,null,2));
     const qparts = req.url.split("=");
     console.log('qparts: ' + JSON.stringify(qparts,null,2));
 
-    if (qparts[0] == "/?tenantid") {
-        socket['tenantid']= qparts[1];
-    } else {
-        socket['tenantid']= 'unknown';
+
+    const urlParams = new URLSearchParams((req.url).substring(1,(req.url).length));
+
+    var rhpk = "";
+    if (urlParams.has('rhpk')) {
+        rhpk = urlParams.get('rhpk');
     }
+    console.log("rhpk: " + rhpk);
+
+    var shpk = "";
+    if (urlParams.has('shpk')) {
+        shpk = urlParams.get('shpk');
+    }
+    console.log("shpk: " + shpk);
+
+    // if (qparts[0] == "/?tenantid") {
+    //     // socket['tenantid']= qparts[1];
+    // } else {
+    //     socket['tenantid']= 'unknown';
+    // }
+    socket['tenantid']= shpk;
+    socket['receiver']= rhpk;
 
     client_cnt = 0;
     wsServer.clients.forEach(client => {
@@ -307,51 +325,62 @@ wsServer.on('connection', (socket, req) => {
     // ----
   
     socket.on('message', message => {
-        console.log('Received:' + message);
-        var is_cmd = false;
-        var parts = message.split(':');
-        if (parts.length > 1) {
-            console.log('parts: ' + JSON.stringify(parts,null,2));
-            if (parts.length > 2) {
-                if (parts[1] == "cmd") {
-                    console.log('Is Command');
-                    is_cmd = true;
-                    switch (parts[2]) {
-                        case "getnick":
-                            console.log('GetNick!!');
-                            break;
-                        case "setnick":
-                            if (parts.length > 3) {
-                                console.log('SetNick: ' + parts[3]);
-                                // Do the nickname setting logic
-                            } else {
-                                console.log('SetNick: ' + 'needs a nickname.');
-                            }
-                            break;
-                        default:
-                            console.log('Default!!');
-                    }                    
-                } else {
-                    console.log('Not Command');
-                }
-            } else {
-                console.log('Not Command');
-            }
+        // console.log('Received:' + message);
+        const msg = JSON.parse(message);
+        
+        console.log('msg: ' + JSON.stringify(msg,null,2));
+        
+        if (msg.action == "info") {
+            console.log('Info: ' + msg.hpk);
+        } else if (msg.action == "post") {
+            console.log('Post: ' + " to " + msg.relay);
         } else {
-            // console.log('Malformed Message');
-            // ---
-            console.log('Websocket Chart');
-            deviceId = message;
-            deviceStatus = (deviceStatus == "On") ? "Off" : "On";
-            // ---
+            console.log('Unknown Action');
         }
-        if (!is_cmd) {
-            broadcast(message);
-        }
+        // var is_cmd = false;
+        // var parts = message.split(':');
+        // if (parts.length > 1) {
+        //     console.log('parts: ' + JSON.stringify(parts,null,2));
+        //     if (parts.length > 2) {
+        //         if (parts[1] == "cmd") {
+        //             console.log('Is Command');
+        //             is_cmd = true;
+        //             switch (parts[2]) {
+        //                 case "getnick":
+        //                     console.log('GetNick!!');
+        //                     break;
+        //                 case "setnick":
+        //                     if (parts.length > 3) {
+        //                         console.log('SetNick: ' + parts[3]);
+        //                         // Do the nickname setting logic
+        //                     } else {
+        //                         console.log('SetNick: ' + 'needs a nickname.');
+        //                     }
+        //                     break;
+        //                 default:
+        //                     console.log('Default!!');
+        //             }                    
+        //         } else {
+        //             console.log('Not Command');
+        //         }
+        //     } else {
+        //         console.log('Not Command');
+        //     }
+        // } else {
+        //     // console.log('Malformed Message');
+        //     // ---
+        //     console.log('Websocket Chart');
+        //     deviceId = message;
+        //     deviceStatus = (deviceStatus == "On") ? "Off" : "On";
+        //     // ---
+        // }
+        // if (!is_cmd) {
+        //     broadcast(message);
+        // }
     });
 
     // --- Uncomment for /socket/chart
-    var intervalID = setInterval(myCallback, 2000);
+    // var intervalID = setInterval(myCallback, 2000);
 
     function myCallback() {
         getTemp(deviceId).then((t)=>{
@@ -442,15 +471,19 @@ function sendInvoice(invReq) {
 function broadcast(data) {
 
     var idx = 1;
+    var bidx = 1;
     wsServer.clients.forEach(client => {
         // console.log("client: " + JSON.stringify(client, null, 2));
-        console.log("client: " + idx + " " + client.tenantid);
-
-        if (client.readyState === ws.OPEN) {
-            client.send(data);
+        console.log("client: " + idx + " " + client.tenantid + " " + client.receiver);
+        if (client.tenantid != 'unknown') {
+            if (client.readyState === ws.OPEN) {
+                client.send(data);
+            }
+            bidx++;
         }
         idx++;
     });
+    console.log('broadcasted...to...'+(bidx-1));
 }
 
 global.notify_tenant = function(tenantid,data) {
@@ -477,8 +510,10 @@ function randomNumber(min, max) {
 let myVar = setInterval(myTimer, (10 * 1000));
 
 function myTimer() {
-    const d = new Date();
-    broadcast("SYS~" + d.toLocaleTimeString()+"~"+randomNumber(1,13));
+    const time_event = {
+        time: Math.round((new Date()).getTime() / 1000),
+    };
+    broadcast(JSON.stringify(time_event));
 }
 
 server.on('upgrade', (request, socket, head) => {

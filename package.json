@@ -1,10 +1,12 @@
 {
     "name": "time-into-crypto",
-    "dependencies": {
+    "old_deps": {
         "@getalby/bitcoin-connect": "latest",
         "@getalby/sdk": "latest",
         "@nostr-dev-kit/ndk": "^2.5.0",
-        "@types/debug": "^4.1.12",
+        "@types/debug": "^4.1.12"
+    },
+    "dependencies": {
         "axios": "latest",
         "better-sqlite3": "latest",
         "bootstrap": "^3.3.7",

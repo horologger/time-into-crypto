@@ -68,6 +68,15 @@ docker run \
 -p 21284:21284 \
 --name time-into-crypto \
 -it horologger/time-into-crypto:v0.0.1 
+
+docker run \
+-e APP_PASSWORD=TimeInto \
+-e PORT=21284 \
+-v data:/data \
+-p 21284:21284 \
+--name time-into-crypto \
+-it horologger/time-into-crypto:v0.0.1 
+
 ```
 Subsequent runs
 ```sh
