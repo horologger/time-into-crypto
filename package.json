@@ -1,29 +1,27 @@
 {
     "name": "time-into-crypto",
     "dependencies": {
+        "@getalby/bitcoin-connect": "latest",
+        "@getalby/sdk": "latest",
+        "@nostr-dev-kit/ndk": "^2.5.0",
+        "@types/debug": "^4.1.12",
+        "axios": "latest",
+        "better-sqlite3": "latest",
+        "bootstrap": "^3.3.7",
+        "cookie-parser": "*",
+        "d3": "^7.8.2",
         "express": "latest",
         "express-session": "*",
-
-        "axios": "latest",
-
-        "passport": "latest",
-        "nodemon": "latest",
-        "better-sqlite3": "latest",
-        "ws": "^7.0.1",
-
-        "nunjucks": "latest",
-
-        "bootstrap": "^3.3.7",
-        "d3": "^7.8.2",
+        "fast-xml-parser": "latest",
         "handlebars": "^4.0.10",
         "jquery": "^3.2.1",
-        "cookie-parser": "*",
-        "moment": "^2.10.3",
-        "ln-service": "latest",
         "kraken-api": "latest",
-        "fast-xml-parser": "latest",
-        "@getalby/sdk": "latest",
-        "@getalby/bitcoin-connect": "latest"  
+        "ln-service": "latest",
+        "moment": "^2.10.3",
+        "nodemon": "latest",
+        "nunjucks": "latest",
+        "passport": "latest",
+        "ws": "^7.0.1"
     },
     "scripts": {
         "debug": "nodemon -e js,njk,html server.js",

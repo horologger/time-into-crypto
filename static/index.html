@@ -156,8 +156,8 @@
     var loc_proto = "http:";
     var loc_host = "localhost:8080";    // actually host:port
     var loc_http = "http://localhost:8080";
-    var hpk = "7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5";
-    var relay = "wss://relay.getalby.com/v1"
+    var hpk = "aaabbb";
+    var relay = "wss://relay.primal.net"
 
     function getHrefParts() {
         log("getHrefParts");
@@ -210,9 +210,10 @@
             document.getElementById("schedule-link").href = sched_link;
             document.getElementById("schedule-link").innerHTML = "My Schedule Link: " + sched_link;
             if (hpk != nostrPubKey) {
-                document.getElementById("mode-button").innerHTML = "Mode: Guest";
+                document.getElementById("mode-button").innerHTML = "Mode: Reservation";
             } else {
-                document.getElementById("mode-button").innerHTML = "Mode: Host";
+                document.getElementById("mode-button").innerHTML = "Mode: Availablity";
+                // document.getElementById("mode-button").innerHTML = "Mode: Confirmation";
             }
     }
 
@@ -404,7 +405,7 @@
 
     <br />
 
-    <button id="mode-button" onclick="switchMode()">Mode: Unknown</button> <a id="schedule-link" href="http://localhost:8080/?hpk=7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5&relay=wss%3A%2F%2Frelay.getalby.com%2Fv1">Schedule Link: http://localhost:8080/?hpk=7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5&relay=wss://relay.getalby.com/v1</a>
+    <button id="mode-button" onclick="switchMode()">Mode: Unknown</button> <a id="schedule-link" href="http://localhost:8080/?hpk=7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5&relay=wss%3A%2F%2Frelay.primal.net">Schedule Link: http://localhost:8080/?hpk=7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5&relay=wss://relay.primal.net</a>
 
     <ul id="chat"></ul>
 
@@ -465,6 +466,7 @@
     <!-- <script>updateButton();</script> -->
 
     <script>
+        var dm = {};
         // https://guides.getalby.com/developer-guide/v/alby-browser-extension-apis/
         async function getNostrPubKey() {
             nostrPubKey = await window.nostr.getPublicKey();
@@ -472,6 +474,22 @@
             log("NostrPubKey: " + nostrPubKey);
             document.getElementById("nostrpubkey-field").value = nostrPubKey;
             setScheduleLink();
+            if ((typeof npk) != "undefined") {
+                if (npk != nostrPubKey) {
+                    npk = nostrPubKey;
+                    (async function() {
+                        await getLNPubKey(null, null);
+                    })();
+                }
+            }
+
+            if (hpk != nostrPubKey) {
+                dm = await makeDMto("This is a secret " + Math.floor(Math.random() * 100), hpk); // to Receiver
+            }
+            // dm = await makeDMto("This is a secret to horologger " + Math.floor(Math.random() * 10), "6771ce6cf4a229db78fa8fcf092c943580d186145baa1218b60070f116ba99ff"); // to Horologger
+            // dm = await makeDMto("This is a secret to vacuum8 " + Math.floor(Math.random() * 10), "7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5"); // to Vacuum8
+            
+            // ev = await makeEVto("This is a public message");
         }
 
         function accountChangedHandler() {
@@ -490,6 +508,35 @@
             log('nostr supported'); 
             nostr.on("accountChanged", accountChangedHandler); // callback is executed once account is changed in provided with multiple accounts
         }
+
+        async function makeEVto(msg) {
+            const event = {
+                created_at: Math.round((new Date()).getTime() / 1000),
+                kind: 1,
+                content: msg,
+                tags: [],
+            };
+            const signedevt = await window.nostr.signEvent(event);
+            // log("makeEVto: " + JSON.stringify(signedevt, null, 2));
+            // log("makeEVto: " + JSON.stringify(signedevt));
+            log("echo '" + JSON.stringify(signedevt) + "' | nak event wss://relay.primal.net");
+            return event;
+        }
+
+        async function makeDMto(msg, pubkey) {
+            const encrypted = await window.nostr.nip04.encrypt(pubkey, msg);
+            const event = {
+                created_at: Math.round((new Date()).getTime() / 1000),
+                kind: 4,
+                content: encrypted,
+                tags: [['p',pubkey]],
+            };
+            const signedEvent = await window.nostr.signEvent(event);
+            // log("makeDMto: " + JSON.stringify(signedEvent, null, 2));
+            log("echo '" + JSON.stringify(signedEvent) + "' | nak event wss://relay.primal.net");
+            return signedEvent;
+        }
+
 
     </script>
     <ul id="webln">Nothing Yet!</ul>

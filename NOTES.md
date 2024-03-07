@@ -106,7 +106,7 @@ nak event { \
 
 
 nak event \
---sec ab6249d3538e207727e56026e7cda95fe8f6a53fcf47c466f4680f97c922f59b \
+--sec ab6249d3538e2074680f97c922f59b \
 -c 'good morning' \
 --tag t=gm wss://relay.primal.net wss://relay.damus.io \--sec 
 
@@ -117,7 +117,7 @@ echo '\
 "tags":[["t","gm"]],\
 "content":"good morning"\
 }'\
- | nak sign --sec ab6249d3538e207727e56026e7cda95fe8f6a53fcf47c466f4680f97c922f59b
+ | nak sign --sec ab6249d3538ef47c466f4680f97c922f59b
 
-echo '{"content":"hello world","kind":1,"pubkey":"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798","tags":[]}' | nak event --sec ab6249d3538e207727e56026e7cda95fe8f6a53fcf47c466f4680f97c922f59b
+echo '{"content":"hello world","kind":1,"pubkey":"79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798","tags":[]}' | nak event --sec ab62480f97c922f59b
 
