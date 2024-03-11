@@ -21,9 +21,11 @@
         "ln-service": "latest",
         "moment": "^2.10.3",
         "nodemon": "latest",
+        "nostr": "^0.2.8",
+        "nostr-tools": "^2.3.1",
         "nunjucks": "latest",
         "passport": "latest",
-        "ws": "^7.0.1"
+        "ws": "^8.8.1"
     },
     "scripts": {
         "debug": "nodemon -e js,njk,html server.js",

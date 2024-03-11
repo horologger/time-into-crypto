@@ -11,6 +11,9 @@ app.use(express.static('static'));
 var server = require("http").createServer();
 const ws = require('ws');
 
+const nt = require('nostr-tools');
+(0, nt.useWebSocketImplementation)(require('ws'));
+
 const {authenticatedLndGrpc} = require('ln-service');
 // const {getWalletInfo} = require('ln-service');
 // const {getInvoices} = require('ln-service');
@@ -324,7 +327,7 @@ wsServer.on('connection', (socket, req) => {
     var deviceStatus = deviceStatus || null;
     // ----
   
-    socket.on('message', message => {
+    socket.on('message', async message => {
         // console.log('Received:' + message);
         const msg = JSON.parse(message);
         
@@ -332,10 +335,75 @@ wsServer.on('connection', (socket, req) => {
         
         if (msg.action == "info") {
             console.log('Info: ' + msg.hpk);
+            if (msg.hpk != 'unknown') {
+                console.log('Use ' + msg.relay + ' to get info on ' + msg.hpk);
+                const irelay = new nt.Relay(msg.relay);
+                await irelay.connect();
+                console.log(`connected to irelay ${irelay.url}`)
+                // irelay.subscribe([
+                //     {
+                //     kinds: [0],
+                //     authors: [msg.hpk],
+                //     },
+                // ], {
+                //     onevent(event) {
+                //     console.log('got event:', event)
+                //     }
+                // });
+
+                // let's query for an event that exists
+                const sub = irelay.subscribe([
+                    {
+                    kinds: [0],
+                    authors: [msg.hpk]
+                    },
+                ], {
+                    onevent(event) {
+                    // console.log('Found them:', JSON.stringify(event,null,2));
+                    console.log('content: ' + event.content);
+                    const content = JSON.parse(event.content);
+                    console.log('name: ' + content.name);
+                    console.log('display: ' + content.display_name);
+                    console.log('picture: ' + content.picture);
+                    const info_event = {
+                        type: "info",
+                        info: content.display_name
+                    };
+                    broadcast(JSON.stringify(info_event));
+                },
+                    oneose() {
+                        console.log('sub has closed');
+                        sub.close()
+
+                        irelay.close();
+                        console.log(`irelay ${irelay.url} has closed`);   
+
+                    }
+                })
+            }
         } else if (msg.action == "post") {
-            console.log('Post: ' + " to " + msg.relay);
+            console.log('Post: ' + "to " + msg.relay);
+            console.log('msg: ' + "to " + msg.msg);
+
+            console.log(JSON.stringify(msg,null,2));
+
+            // var dme = {};
+
+            // await make_dm_event(em, horologger);
+
+            // console.log("dm event: " + dme);
+            // post_relay.send(msg.event);
+            const relay = new nt.Relay(msg.relay);
+            await relay.connect();
+            console.log(`connected to ${relay.url}`)
+            await relay.publish(msg.event);
+            relay.close();
+            console.log(`relay ${relay.url} has closed`);   
+
+        } else if (msg.action == "other") {
+            console.log('Unhandled Action' + msg.action);
         } else {
-            console.log('Unknown Action');
+            console.log('Unknown Action' + msg.action);
         }
         // var is_cmd = false;
         // var parts = message.split(':');
@@ -378,6 +446,25 @@ wsServer.on('connection', (socket, req) => {
         //     broadcast(message);
         // }
     });
+
+//     import { Relay } from 'nostr-tools/relay'
+
+// const relay = await Relay.connect('wss://relay.example.com')
+// console.log(`connected to ${relay.url}`)
+
+//     // let's query for an event that exists
+//     const sub = relay.subscribe([
+//     {
+//         ids: ['d7dd5eb3ab747e16f8d0212d53032ea2a7cadef53837e5a6c66d42849fcb9027'],
+//     },
+//     ], {
+//     onevent(event) {
+//         console.log('we got the event we wanted:', event)
+//     },
+//     oneose() {
+//         sub.close()
+//     }
+//     })
 
     // --- Uncomment for /socket/chart
     // var intervalID = setInterval(myCallback, 2000);
@@ -500,6 +587,89 @@ global.notify_tenant = function(tenantid,data) {
     });
 }
 
+// =============================================================================    
+
+// Giving up on 'nostr' for now and trying 'nostr-tools' instead
+// const {Relay} = require('nostr');
+// const {RelayPool, encryptDm, decryptDm, calculateId, createDelegation,
+// 	createDelegationEvent, getPublicKey, signDelegationToken,
+// 	signId, verifyEvent} = require('nostr');
+const {RelayPool} = require('nostr');
+
+
+const jb55 = "32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245"
+const vacuum8    = "6771ce6cf4a229db78fa8fcf092c943580d186145baa1218b60070f116ba99ff"
+const horologger = "7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5"
+const damus = "wss://relay.damus.io"
+const scsi = "wss://nostr-pub.wellorder.net"
+const primal = "wss://relay.primal.net"
+// const relays = [damus, scsi]
+
+const relays = [primal]
+
+// const post_relay = Relay(primal, {reconnect: true});
+
+// post_relay.on('open', () => {
+//     console.log('post_relay is open');
+// });
+
+// post_relay.on('eose', () => {   
+//     console.log('post_relay has closed');
+// });
+
+
+const pool = RelayPool(relays);
+
+pool.on('open', relay => {
+    console.log(`connected to ${relay.url}`)
+	// relay.subscribe("subid", {limit: 1, kinds:[4], authors: [horologger]})
+	// relay.subscribe("subid", {limit: 3, kinds:[1], authors: [horologger]})
+	relay.subscribe("subid", {limit: 29, kinds:[0], authors: [horologger]})
+});
+
+pool.on('eose', relay => {
+    console.log(`relay ${relay.url} has closed`)
+	relay.close()
+});
+
+pool.on('event', (relay, sub_id, ev) => {
+    // console.log("relay: " + JSON.stringify(relay));
+    console.log("relay.url: " + relay.url);
+	console.log(ev);
+});
+
+
+
+function create_dm_event(msg, pubkey) {
+	// const created_at = 0;
+    const created_at = Math.round((new Date()).getTime() / 1000);
+	const kind = 4;
+    const content = (msg ? msg : "some cryptic message");
+    const tags = [['p', pubkey]];
+
+	return {pubkey: pubkey, created_at, kind, content, tags}
+}
+
+// var em = encryptDm(PRIVKEY, vacuum8, "This is a private message");
+// console.log("encrypted msg: " + em);
+
+async function make_dm_event(emsg, pubkey) {
+    var dme = create_dm_event(emsg, pubkey);
+    dme.id = await calculateId(dme);
+    dme.sig = await signId(PRIVKEY, dme.id)
+    console.log(dme);
+    return dme;
+}
+
+// var dme = {};
+
+// await make_dm_event(em, horologger);
+
+// console.log("dm event: " + dme);
+// pool.send(dme,pool[0]);
+
+
+// =============================================================================    
 
 // Function to generate random number
 function randomNumber(min, max) {
@@ -511,6 +681,7 @@ let myVar = setInterval(myTimer, (10 * 1000));
 
 function myTimer() {
     const time_event = {
+        type: "time",
         time: Math.round((new Date()).getTime() / 1000),
     };
     broadcast(JSON.stringify(time_event));

@@ -237,7 +237,8 @@
         connection.onopen = () => {
             log("connected");
             // connection.send("1A37F239BC1");
-            connection.send(JSON.stringify({action: "info", hpk: nostrPubKey}));
+            // connection.send(JSON.stringify({action: "info", hpk: nostrPubKey, relay: relay}));
+            connection.send(JSON.stringify({action: "info", hpk: hpk, relay: relay}));
             document.getElementById("conn-status").style.backgroundColor = "#32d40d";   // green
         };
 
@@ -265,12 +266,12 @@
                         log("Invoice Sent!");
                         document.getElementById("invoice").innerHTML = json.invoice;
                         testLN04();
+                } else if (json.type == "info"){
+                    document.getElementById("receiver-info").innerHTML = json.info;
+                } else if (json.type == "time"){
+                    document.getElementById("server-time").innerHTML = json.time;
                 } else {
-                    // log(event.data);
-
-                    // var logger = document.querySelector("#logger");
-                    // logger.innerHTML = logger.innerHTML + "\n" + event.data;
-                    // logger.scrollTop = logger.scrollHeight;
+                    log(event.data);
                 }
                 return;
             } catch (e) {
@@ -404,8 +405,9 @@
     <button id="disconnect" onclick="disconnect()">Disconnect</button>
     <button id="reconnect" onclick="reconnect()" style="visibility: hidden">Connect</button>
 
-    <button id="test01" onclick="doTestWS01()">Test 01</button>
-    <button id="test02" onclick="testLN02()">Test 02 : GetInfo</button>
+    <button id="test01" onclick="doTestWS01()">Test 01 : DM</button>
+    <button id="test02" onclick="doTestWS02()">Test 02 : EV</button>
+    <!-- <button id="test02" onclick="testLN02()">Test 02 : GetInfo</button> -->
     <button id="test03" onclick="testLN03()">Test 03 : MakeInvoice</button>
     <button id="test04" onclick="testLN04()">Test 04 : SendPayment</button>
     <button id="test05" onclick="testLN05()">Test 05 : SignMessage</button>
@@ -468,7 +470,6 @@
 
     <script src="webln_handlers.js"></script>
     
-
     <!-- <script src="metamask-onboarding.bundle.js"></script> -->
     <!-- <script src="metamask-onboarding.js"></script> -->
     <!-- <script>updateButton();</script> -->
@@ -494,7 +495,9 @@
 
             
             if (hpk != nostrPubKey) {
-                dm = await makeDMto("This is a secret " + Math.floor(Math.random() * 100), hpk); // to Receiver
+                const damsg = "I'm checking out your timeslots. " + Math.floor(Math.random() * 100);
+                log(damsg)
+                dm = await makeDMto(damsg, hpk); // to Receiver
             }
             // dm = await makeDMto("This is a secret to horologger " + Math.floor(Math.random() * 10), "6771ce6cf4a229db78fa8fcf092c943580d186145baa1218b60070f116ba99ff"); // to Horologger
             // dm = await makeDMto("This is a secret to vacuum8 " + Math.floor(Math.random() * 10), "7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5"); // to Vacuum8
@@ -525,21 +528,54 @@
             log('nostr not supported'); 
         }
 
+        async function makeDMto(msg, pubkey) {
+            log("makeDMto: " + msg + " to " + pubkey);
+            const encrypted = await window.nostr.nip04.encrypt(pubkey, msg);
+            const event = {
+                created_at: Math.round((new Date()).getTime() / 1000),
+                kind: 4,
+                content: encrypted,
+                tags: [['p',pubkey]],
+            };
+            const signedEvent = await window.nostr.signEvent(event);
+            // log("makeDMto: " + JSON.stringify(signedEvent, null, 2));
+            log("echo '" + JSON.stringify(signedEvent) + "' | nak event wss://relay.primal.net");
+
+            const eventTask = {
+                action: "post",
+                relay: "wss://relay.primal.net",
+                msg: msg,
+                event: signedEvent
+            }
+            stashed = eventTask;
+            connection.send(JSON.stringify(eventTask));
+
+            return signedEvent;
+        }
+
+        var stashed = {};
+
+
         function doTestWS01() {
             log("doTestWS01");
-            (async function() {
-                await testWS01();
-            })();
+            // (async function() {
+            //     await testWS01();
+            // })();
+            log("stashed: " + JSON.stringify(stashed, null, 2));
+            connection.send(JSON.stringify(stashed));
         }
 
         async function testWS01() {
             log("testWS01");
             var ev = {};
-            ev = await makeEVto("Cool test message");
+            // ev = await makeEVto("Cool test message");
+            const sm = "Soooo secret " + Math.floor(Math.random() * 100);
+            ev = await makeDMto(sm, hpk); // to Receiver
 
             const eventTask = {
                 action: "post",
                 relay: "wss://relay.primal.net",
+                msg: sm,
                 event: ev
             }
 
@@ -560,22 +596,38 @@
             return signedevt;
         }
 
-        async function makeDMto(msg, pubkey) {
-            const encrypted = await window.nostr.nip04.encrypt(pubkey, msg);
-            const event = {
-                created_at: Math.round((new Date()).getTime() / 1000),
-                kind: 4,
-                content: encrypted,
-                tags: [['p',pubkey]],
-            };
-            const signedEvent = await window.nostr.signEvent(event);
-            // log("makeDMto: " + JSON.stringify(signedEvent, null, 2));
-            log("echo '" + JSON.stringify(signedEvent) + "' | nak event wss://relay.primal.net");
-            return signedEvent;
+        async function doTestWS02() {
+            log("doTestWS02");
+            var normal_event = {};
+            // (async function() {
+            //     normal_event = await testWS02();
+            // })();
+            normal_event = await testWS02();
+            connection.send(JSON.stringify(normal_event));
+        }
+
+        async function testWS02() {
+            log("testWS02");
+            var ev = {};
+            // ev = await makeEVto("Cool test message");
+            const ne = "Normie event " + Math.floor(Math.random() * 100);
+            ev = await makeEVto(ne);
+
+            const eventTask = {
+                action: "post",
+                relay: "wss://relay.primal.net",
+                ne: ne,
+                event: ev
+            }
+            return eventTask;
         }
 
 
+
     </script>
+    <ul id="server-time">Server Time!</ul>
+    <ul id="receiver-info">Who Receiving!</ul>
+
     <ul id="webln-div">Nothing Yet!</ul>
 
     <!-- Bitcoin Connect components are now available -->
