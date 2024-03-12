@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <title>Web Socket Demo</title>
     <script>
+    var bitcoinPrice = 0;
     function log(message)
     {
         console.log(message);
@@ -240,6 +241,7 @@
             // connection.send(JSON.stringify({action: "info", hpk: nostrPubKey, relay: relay}));
             connection.send(JSON.stringify({action: "info", hpk: hpk, relay: relay}));
             document.getElementById("conn-status").style.backgroundColor = "#32d40d";   // green
+            setTSdefaults();
         };
 
         connection.onclose = () => {
@@ -270,6 +272,10 @@
                     document.getElementById("receiver-info").innerHTML = json.info;
                 } else if (json.type == "time"){
                     document.getElementById("server-time").innerHTML = json.time;
+                } else if (json.type == "price"){
+                    bitcoinPrice = parseInt(json.price);
+                    document.getElementById("webln-div").innerHTML = bitcoinPrice;
+                    recalcUSD("recalc");
                 } else {
                     log(event.data);
                 }
@@ -400,6 +406,7 @@
 
     <script>
             function addTSrow() {
+                recalcUSD("recalc");
                 var tstable = document.getElementById("time-slots-table");
                 var ts_year = parseInt((document.getElementById("ts-year")).value);
                 var ts_month = parseInt((document.getElementById("ts-month")).value);
@@ -411,49 +418,119 @@
                 var ts_minute = parseInt((document.getElementById("ts-minute")).value);
                 if (ts_minute < 10) { ts_minute = "0" + ts_minute; }
                 var ts_duration = parseInt((document.getElementById("ts-duration")).value);
+                var ts_satsmin = parseInt((document.getElementById("ts-satsmin")).value);
+                var ts_usd = parseInt((document.getElementById("ts-usd")).value);
 
                 var newRow = tstable.insertRow(-1);
                 var ridx = 0;
                 var newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='4' value='" + ts_year + "'/>";
+                newCell.innerHTML = "<input type='text' size='4' disabled value='" + ts_year + "'/>";
 
                 newCell = newRow.insertCell(ridx++);
                 newCell.innerHTML = "-";
 
                 newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='2' value='" + ts_month + "'/>";
+                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_month + "'/>";
 
                 newCell = newRow.insertCell(ridx++);
                 newCell.innerHTML = "-";
 
                 newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='2' value='" + ts_day + "'/>";
+                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_day + "'/>";
 
                 newCell = newRow.insertCell(ridx++);
                 newCell.innerHTML = "&nbsp;";
 
                 newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='2' value='" + ts_hour + "'/>";
+                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_hour + "'/>";
 
                 newCell = newRow.insertCell(ridx++);
                 newCell.innerHTML = ":";
 
                 newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='2' value='" + ts_minute + "'/>";
+                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_minute + "'/>";
 
                 newCell = newRow.insertCell(ridx++);
                 newCell.innerHTML = "&nbsp;";
 
                 newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='2' value='" + ts_duration + "'/>";
+                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_duration + "'/>";
 
                 newCell = newRow.insertCell(ridx++);
                 newCell.innerHTML = "&nbsp;";
 
                 newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<button onclick='addTSrow()'  style='visibility: block'>Reserve</button>";
+                newCell.innerHTML = "<input type='text' size='6' disabled value='" + ts_satsmin + "'/>";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "&nbsp;";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='7' disabled value='" + ts_usd + "'/>";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "&nbsp;";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<button onclick='delTSrow(" + tstable.rows.length + ")'  style='visibility: block'>Delete TimeSlot</button>";
 
             }
+            function delTSrow(rowNum) {
+                console.log("rowNum: " + rowNum);
+                var tstable = document.getElementById("time-slots-table");
+                console.log("tstable.rows.length: " + tstable.rows.length);
+                tstable.deleteRow(-1);
+            }
+
+            function isNumberKey(evt) {
+                // console.log(JSON.stringify(evt, null, 2));
+                var charCode = (evt.which) ? evt.which : evt.keyCode
+                console.log("charCode: " + charCode);
+                if ((charCode == 8) || (charCode == 9)) return true; // backspace or tab
+                if ((charCode < 48) || (charCode > 57)) {
+                    return false;
+                }
+                return true;
+            }
+
+            function recalcUSD(event)
+            {  
+                const isNum = isNumberKey(event);
+                if (isNum || (event == "recalc")) {
+                
+                    var ts_duration = parseInt((document.getElementById("ts-duration")).value);
+                    var ts_satsmin = parseInt((document.getElementById("ts-satsmin")).value);
+                    var usdAmt = (((ts_duration * ts_satsmin) / 100000000) * bitcoinPrice).toFixed(2);
+                    // let usdAmtStr = "$" + usdAmt;
+                    document.getElementById("ts-usd").value = usdAmt;
+                    console.log("usdAmt: " + usdAmt);
+                }
+                return isNum;
+            }
+
+            function setTSdefaults() {
+
+                const n = new Date();
+                const d = new Date(n.getTime() + (60 * 60 * 1000 * 2) + (29 * 60 * 1000));  // 2 hours and 29 minutes from now
+                var y = d.getFullYear();
+                var m = d.getMonth() + 1;
+                if (m < 10) { m = "0" + m; }
+                var day = d.getDate();
+                if (day < 10) { day = "0" + day; }
+                var h = d.getHours();
+                if (h < 10) { h = "0" + h; }
+                var min = d.getMinutes();
+                if (min > 30) { min = "30"; } else { min = "00"; }
+                // console.log("y: " + y + " m: " + m + " day: " + day + " h: " + h + " min: " + min);
+
+                var ts_year = document.getElementById("ts-year"); ts_year.value = y;
+                var ts_month = document.getElementById("ts-month"); ts_month.value = m;
+                var ts_day = document.getElementById("ts-day"); ts_day.value = day;
+                var ts_hour = document.getElementById("ts-hour"); ts_hour.value = h;
+                var ts_minute = document.getElementById("ts-minute"); ts_minute.value = min;
+ 
+            }
+
     </script>
     <table id="time-slots-table" border="0" cellspacing="0" cellpadding="0">
     <tr id="rowtr" style="font-family: monospace; font-size: smaller;" >
@@ -463,6 +540,8 @@
         <th align="center">Hour</th><th align="center">:</th>
         <th align="center">Min</th><th align="center">&nbsp;</th>
         <th align="center">Dur</th><th align="center">&nbsp;</th>
+        <th align="center">Sats/Min</th><th align="center">&nbsp;</th>
+        <th align="center">USD</th><th align="center">&nbsp;</th>
         <th align="left">Action</th>
     </tr>
     <tr id="row00" style="font-family: monospace">
@@ -471,10 +550,12 @@
         <td align="right"><input id="ts-day"      type="text" size="2" value="12"/></td><td align="center">&nbsp;</td>
         <td align="right"><input id="ts-hour"     type="text" size="2" value="13"/></td><td align="center">:</td>
         <td align="right"><input id="ts-minute"   type="text" size="2" value="00"/></td><td align="center">&nbsp;</td>
-        <td align="right"><input id="ts-duration" type="text" size="2" value="30"/></td><td align="center">&nbsp;</td>
+        <td align="right"><input id="ts-duration" type="text" size="2" value="30" onkeypress="return recalcUSD(event)" /></td><td align="center">&nbsp;</td>
+        <td align="right"><input id="ts-satsmin"  type="text" size="6" value="1000" onkeypress="return recalcUSD(event)" /></td><td align="center">&nbsp;</td>
+        <td align="center"><input id="ts-usd"     type="text" size="7" value="calc" disabled style="text-align: right;"/></td><td align="center">&nbsp;</td>
         <td align="left">
             <button id="test01" onclick="addTSrow()"  style="visibility: block">Add TimeSlot</button>
-            <button id="test01" onclick="addTSrow()"  style="visibility: hidden">Reserve</button>
+            <!-- <button id="test01" onclick="addTSrow()"  style="visibility: hidden">Reserve</button> -->
         </td>
     </tr>
     </table>

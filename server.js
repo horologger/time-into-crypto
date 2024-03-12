@@ -326,7 +326,22 @@ wsServer.on('connection', (socket, req) => {
     var deviceId = null;
     var deviceStatus = deviceStatus || null;
     // ----
-  
+ 
+    (async () => {
+        const retval = (await getPrice("bitcoin", "usd"));
+        bitcoinPrice = retval.data.bitcoin.usd;
+        console.log(bitcoinPrice);
+        const info_event = {
+            type: "price",
+            ticker: "bitcoin",
+            currency: "usd",
+            price: bitcoinPrice
+        };
+        broadcast(JSON.stringify(info_event));
+
+    })();   
+    
+
     socket.on('message', async message => {
         // console.log('Received:' + message);
         const msg = JSON.parse(message);
@@ -638,6 +653,20 @@ pool.on('event', (relay, sub_id, ev) => {
 	console.log(ev);
 });
 
+async function getPrice(ids, vs_currencies) {
+
+    let requrl = "https://api.coingecko.com/api/v3/simple/price?ids=" + ids + "&vs_currencies=" + vs_currencies;
+   
+    return await axios.get(requrl);
+
+}
+
+var bitcoinPrice = 0;
+(async () => {
+    const retval = (await getPrice("bitcoin", "usd"));
+    bitcoinPrice = retval.data.bitcoin.usd;
+    console.log(bitcoinPrice);
+})();   
 
 
 function create_dm_event(msg, pubkey) {
