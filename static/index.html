@@ -398,6 +398,87 @@
         <br />
     </form>
 
+    <script>
+            function addTSrow() {
+                var tstable = document.getElementById("time-slots-table");
+                var ts_year = parseInt((document.getElementById("ts-year")).value);
+                var ts_month = parseInt((document.getElementById("ts-month")).value);
+                if (ts_month < 10) { ts_month = "0" + ts_month; }
+                var ts_day = parseInt((document.getElementById("ts-day")).value);
+                if (ts_day < 10) { ts_day = "0" + ts_day; }
+                var ts_hour = parseInt((document.getElementById("ts-hour")).value);
+                if (ts_hour < 10) { ts_hour = "0" + ts_hour; }
+                var ts_minute = parseInt((document.getElementById("ts-minute")).value);
+                if (ts_minute < 10) { ts_minute = "0" + ts_minute; }
+                var ts_duration = parseInt((document.getElementById("ts-duration")).value);
+
+                var newRow = tstable.insertRow(-1);
+                var ridx = 0;
+                var newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='4' value='" + ts_year + "'/>";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "-";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='2' value='" + ts_month + "'/>";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "-";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='2' value='" + ts_day + "'/>";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "&nbsp;";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='2' value='" + ts_hour + "'/>";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = ":";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='2' value='" + ts_minute + "'/>";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "&nbsp;";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='2' value='" + ts_duration + "'/>";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "&nbsp;";
+
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<button onclick='addTSrow()'  style='visibility: block'>Reserve</button>";
+
+            }
+    </script>
+    <table id="time-slots-table" border="0" cellspacing="0" cellpadding="0">
+    <tr id="rowtr" style="font-family: monospace; font-size: smaller;" >
+        <th align="center">Year</th><th align="center">-</th>
+        <th align="center">Mon</th><th align="center">-</th>
+        <th align="center">Day</th><th align="center">&nbsp;</th>
+        <th align="center">Hour</th><th align="center">:</th>
+        <th align="center">Min</th><th align="center">&nbsp;</th>
+        <th align="center">Dur</th><th align="center">&nbsp;</th>
+        <th align="left">Action</th>
+    </tr>
+    <tr id="row00" style="font-family: monospace">
+        <td align="right"><input id="ts-year"     type="text" size="4" value="2024"/></td><td align="center">-</td>
+        <td align="right"><input id="ts-month"    type="text" size="2" value="03"/></td><td align="center">-</td>
+        <td align="right"><input id="ts-day"      type="text" size="2" value="12"/></td><td align="center">&nbsp;</td>
+        <td align="right"><input id="ts-hour"     type="text" size="2" value="13"/></td><td align="center">:</td>
+        <td align="right"><input id="ts-minute"   type="text" size="2" value="00"/></td><td align="center">&nbsp;</td>
+        <td align="right"><input id="ts-duration" type="text" size="2" value="30"/></td><td align="center">&nbsp;</td>
+        <td align="left">
+            <button id="test01" onclick="addTSrow()"  style="visibility: block">Add TimeSlot</button>
+            <button id="test01" onclick="addTSrow()"  style="visibility: hidden">Reserve</button>
+        </td>
+    </tr>
+    </table>
+
     <p id="demo"></p>
 
     <button onclick="myVar = setInterval(myTimer ,1000)">Start Timer</button>
@@ -635,8 +716,8 @@
 
     <script>
         function myTimer() {
-            const d = new Date();
-            document.getElementById("demo").innerHTML = d.toLocaleTimeString();
+            const timenow = Math.round((new Date()).getTime() / 1000);
+            document.getElementById("demo").innerHTML = timenow;
         };
     </script>
     
