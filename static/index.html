@@ -221,6 +221,90 @@
             }
     }
 
+    function getTimeSlots() {
+        log("getTimeSlots");
+        connection.send(JSON.stringify({action: "getTimeSlots", hpk: hpk}));
+    }
+
+    function clearTimeSlots() {
+        log("clearTimeSlots");
+        var tstable = document.getElementById("time-slots-table");
+        while (tstable.rows.length > 2) {   // Save the first row as the input row for new entries
+            tstable.deleteRow(-1);
+        }
+    }
+
+    function redrawTimeSlots(slots) {
+        log("redrawTimeSlots");
+        clearTimeSlots();
+
+                // recalcUSD("recalc");
+        var tstable = document.getElementById("time-slots-table");
+        var ridx = 0;
+        var newRow = {};
+        var newCell = {};
+        slots.forEach(function(slot) {
+
+            log("slot: " + JSON.stringify(slot, null, 2));
+            ridx = 0;
+            var sDate = new Date(slot.start);
+            var ts_year = sDate.getFullYear();
+            var ts_month = sDate.getMonth() + 1;
+            if (ts_month < 10) { ts_month = "0" + ts_month; }
+            var ts_day = sDate.getDate();
+            if (ts_day < 10) { ts_day = "0" + ts_day; }
+            var ts_hour = sDate.getHours();
+            if (ts_hour < 10) { ts_hour = "0" + ts_hour; }
+            var ts_minute = sDate.getMinutes();
+            if (ts_minute < 10) { ts_minute = "0" + ts_minute; }
+            var sDuration = parseInt(slot.duration);
+
+
+            // Need satsmin and usd for checking if the price is still acceptable
+
+            var ts_satsmin = parseInt(slot.satsmin);
+            var ts_quote = parseFloat(slot.quote);
+            var ts_currency = "";   // USD, EUR, GBP, etc.
+
+            newRow = tstable.insertRow(-1);
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "<input type='text' size='4' disabled value='" + ts_year + "'/>";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "-";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_month + "'/>";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "-";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_day + "'/>";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "&nbsp;";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_hour + "'/>";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = ":";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_minute + "'/>";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "&nbsp;";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "<input type='text' size='4' style='text-align: right;' disabled value='" + sDuration + "'/>";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "&nbsp;";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "<input type='text' size='6' style='text-align: right;' disabled value='" + ts_satsmin + "'/>";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "&nbsp;";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "<input type='text' size='7' style='text-align: right;' disabled value='" + ts_quote + "'/>";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "&nbsp;";
+            newCell = newRow.insertCell(ridx++);
+            newCell.innerHTML = "<button onclick='delTSrow(" + tstable.rows.length + ")'  style='visibility: block'>Delete TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
+
+        });
+    }
+
     function switchMode() {
         log("switchMode");
     }
@@ -276,6 +360,8 @@
                     bitcoinPrice = parseInt(json.price);
                     document.getElementById("webln-div").innerHTML = bitcoinPrice;
                     recalcUSD("recalc");
+                } else if (json.type == "timeslots"){
+                    redrawTimeSlots(json.slots);
                 } else {
                     log(event.data);
                 }
@@ -454,7 +540,7 @@
                 newCell.innerHTML = "&nbsp;";
 
                 newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_duration + "'/>";
+                newCell.innerHTML = "<input type='text' size='4' disabled value='" + ts_duration + "'/>";
 
                 newCell = newRow.insertCell(ridx++);
                 newCell.innerHTML = "&nbsp;";
@@ -550,8 +636,8 @@
         <td align="right"><input id="ts-day"      type="text" size="2" value="12"/></td><td align="center">&nbsp;</td>
         <td align="right"><input id="ts-hour"     type="text" size="2" value="13"/></td><td align="center">:</td>
         <td align="right"><input id="ts-minute"   type="text" size="2" value="00"/></td><td align="center">&nbsp;</td>
-        <td align="right"><input id="ts-duration" type="text" size="2" value="30" onkeypress="return recalcUSD(event)" /></td><td align="center">&nbsp;</td>
-        <td align="right"><input id="ts-satsmin"  type="text" size="6" value="1000" onkeypress="return recalcUSD(event)" /></td><td align="center">&nbsp;</td>
+        <td align="right"><input id="ts-duration" type="text" size="4" value="30" style="text-align: right;" onkeypress="return recalcUSD(event)" /></td><td align="center">&nbsp;</td>
+        <td align="right"><input id="ts-satsmin"  type="text" size="6" value="1000" style="text-align: right;" onkeypress="return recalcUSD(event)" /></td><td align="center">&nbsp;</td>
         <td align="center"><input id="ts-usd"     type="text" size="7" value="calc" disabled style="text-align: right;"/></td><td align="center">&nbsp;</td>
         <td align="left">
             <button id="test01" onclick="addTSrow()"  style="visibility: block">Add TimeSlot</button>
@@ -666,6 +752,9 @@
             
             // ev = await makeEVto("This is a public message");
 
+            getTimeSlots();
+
+
             disconnect();
             reconnect();
         }
@@ -679,8 +768,11 @@
             (async function() {
                 await getLNPubKey(null, null);
             })();
-            setScheduleLink();
             getHrefParts();
+            setScheduleLink();
+            // getHrefParts();
+            getTimeSlots();
+
         }
 
         if ((typeof nostr != 'undefined') && (nostr.on)) { 

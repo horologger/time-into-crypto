@@ -14,6 +14,60 @@ const ws = require('ws');
 const nt = require('nostr-tools');
 (0, nt.useWebSocketImplementation)(require('ws'));
 
+
+// Importing necessary modules
+var uid = require('uid-safe');
+const Database = require('better-sqlite3');
+
+// Creating an in-memory SQLite database
+const db = new Database(':memory:');
+
+const d10mins = 10 * 60 * 1000;
+const d15mins = 15 * 60 * 1000;
+const d20mins = 20 * 60 * 1000;
+const d30mins = 30 * 60 * 1000;
+const d60mins = 60 * 60 * 1000;
+const d90mins = 90 * 60 * 1000;
+
+// Enum structure for slot states
+const TimeSlotState = {
+    CREATED: 'created',
+    AVAILABLE: 'available',
+    RESERVED: 'reserved',
+    REJECTED: 'rejected',
+    CANCELED: 'canceled',
+    LATE_CREATOR: 'late_creator',
+    LATE_RESERVOR: 'late_reservor',
+    NOSHOW_CREATOR: 'noshow_creator',
+    NOSHOW_RESERVOR: 'noshow_reservor',
+    PAUSED_CREATOR: 'paused_creator',
+    PAUSED_RESERVOR: 'paused_reservor',
+    INPROGRESS: 'in_progress',
+    GOING_LONG: 'going_long',
+    COMPLETE: 'complete',
+    EXPIRED: 'expired',
+    REFUNDED: 'refunded'
+};
+  
+  // Initial time slot data
+const timeslot = {
+    "id": "unknown",
+    "label": "unknown",
+    "creator": "unknown",
+    "reservor": "unknown",
+    "start": Date.now() + d60mins,
+    "duration": d30mins,
+    "satsmin": 10000,
+    "quote": 1.234,
+    "currency": "usd",
+    "state": TimeSlotState.CREATED
+};
+  
+
+// Creating timeslots table in the SQLite database
+db.exec("CREATE TABLE timeslots (id TEXT, label TEXT, created INTEGER, creator TEXT, reservor TEXT, start INTEGER, duration INTEGER, satsmin INTEGER, quote REAL, currency TEXT, state INTEGER)");
+
+
 const {authenticatedLndGrpc} = require('ln-service');
 // const {getWalletInfo} = require('ln-service');
 // const {getInvoices} = require('ln-service');
@@ -281,17 +335,26 @@ var router = require("./router")(app, server);
 const wsServer = new ws.Server({ noServer: true });
 
 var client_cnt = 0;
-gsocket = {};
+gsocket = {};   // Table of websocket connections
+gtimeslots = {};   // Table of timeslots for each tenant
+
+function addTimeSlot(tenantid,slot) {
+    if (typeof gtimeslots[tenantid] == "undefined") {
+        gtimeslots[tenantid] = [];
+    }
+    gtimeslots[tenantid].push(slot);
+}   
+
 
 wsServer.on('connection', (socket, req) => {
     gsocket = socket;
     console.log('New Client Joining...');
     console.log(req.url);
-    const searchParams = new URLSearchParams(req.url);
-    console.log(searchParams.getAll("tenantid"));
-    console.log('token: ' + JSON.stringify(req.url,null,2));
-    const qparts = req.url.split("=");
-    console.log('qparts: ' + JSON.stringify(qparts,null,2));
+    // const searchParams = new URLSearchParams(req.url);
+    // console.log(searchParams.getAll("tenantid"));
+    // console.log('token: ' + JSON.stringify(req.url,null,2));
+    // const qparts = req.url.split("=");
+    // console.log('qparts: ' + JSON.stringify(qparts,null,2));
 
 
     const urlParams = new URLSearchParams((req.url).substring(1,(req.url).length));
@@ -355,16 +418,6 @@ wsServer.on('connection', (socket, req) => {
                 const irelay = new nt.Relay(msg.relay);
                 await irelay.connect();
                 console.log(`connected to irelay ${irelay.url}`)
-                // irelay.subscribe([
-                //     {
-                //     kinds: [0],
-                //     authors: [msg.hpk],
-                //     },
-                // ], {
-                //     onevent(event) {
-                //     console.log('got event:', event)
-                //     }
-                // });
 
                 // let's query for an event that exists
                 const sub = irelay.subscribe([
@@ -415,6 +468,18 @@ wsServer.on('connection', (socket, req) => {
             relay.close();
             console.log(`relay ${relay.url} has closed`);   
 
+        } else if (msg.action == "addTimeSlot") {
+            console.log('Unhandled Action' + msg.action);
+        } else if (msg.action == "delTimeSlot") {
+            console.log('Unhandled Action' + msg.action);
+        } else if (msg.action == "getTimeSlots") {
+            console.log('getTimeSlots for ' + msg.hpk);
+            const createdTimeSlots = timeSlotMgr.getCreatorTimeSlots(msg.hpk);
+            broadcast(JSON.stringify({ type: "timeslots", slots: createdTimeSlots}));
+        // } else if (msg.action == "publishTimeSlots") {
+        //     console.log('Unhandled Action' + msg.action);
+        // } else if (msg.action == "reserveTimeSlot") {
+        //     console.log('Unhandled Action' + msg.action);
         } else if (msg.action == "other") {
             console.log('Unhandled Action' + msg.action);
         } else {
@@ -604,6 +669,7 @@ global.notify_tenant = function(tenantid,data) {
 
 // =============================================================================    
 
+
 // Giving up on 'nostr' for now and trying 'nostr-tools' instead
 // const {Relay} = require('nostr');
 // const {RelayPool, encryptDm, decryptDm, calculateId, createDelegation,
@@ -697,6 +763,100 @@ async function make_dm_event(emsg, pubkey) {
 // console.log("dm event: " + dme);
 // pool.send(dme,pool[0]);
 
+// =============================================================================    
+
+// Singleton pattern implementation for TimeSlotManager
+var TimeSlotManager = (function() {
+    var instance;
+
+    function init() {
+        // Private methods and variables
+        return {
+            addTimeSlot: function(timeslot) {
+                // Generate unique ID and set creation timestamp
+                var uuid = uid.sync(8);
+                timeslot.id = uuid;
+                timeslot.created = Date.now();
+                console.log("uuid: " + uuid);
+                timeslot.reservor = "unknown";
+                timeslot.state = TimeSlotState.CREATED;
+                
+                // Insert timeslot into the SQLite database using transactions for better-sqlite3
+                const stmt = db.prepare("INSERT INTO timeslots VALUES (@id, @label, @created, @creator, @reservor, @start, @duration, @satsmin, @quote, @currency, @state)");
+                const result = stmt.run(timeslot);
+                
+                return uuid;
+            },
+            delTimeSlot: function(uuid) {
+                // Delete timeslot from the SQLite database using transactions for better-sqlite3
+                const stmt = db.prepare("DELETE FROM timeslots WHERE id = ?");
+                const result = stmt.run(uuid);
+            },
+            dumpTimeSlots: function(key, ascend = true) {
+                // Retrieve and display timeslots sorted by the specified key
+                let order = ascend ? 'ASC' : 'DESC';
+                const stmt = db.prepare(`SELECT * FROM timeslots ORDER BY ${key} ${order}`);
+                const rows = stmt.all();
+                rows.forEach(row => {
+                    console.log(`uuid: ${row.id} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} start: ${row.start} duration: ${row.duration} satsmin: ${row.satsmin}`);
+                });
+            },
+            getAllTimeSlots: function(key, ascend = true) {
+                let order = ascend ? 'ASC' : 'DESC';
+                const stmt = db.prepare(`SELECT * FROM timeslots ORDER BY ${key} ${order}`);
+                const rows = stmt.all();
+                return rows;    
+            },
+            getCreatorTimeSlots: function(creator, key = "start", ascend = true, state = null) {
+                let order = ascend ? 'ASC' : 'DESC';
+                var querystring = ``;
+                if (state == null) {
+                    querystring = `SELECT * FROM timeslots WHERE creator = ? ORDER BY ${key} ${order}`;
+                } else {
+                    querystring = `SELECT * FROM timeslots WHERE creator = ? AND state = ? ORDER BY ${key} ${order}`;
+                }
+                const stmt = db.prepare(querystring);
+                var rows = [];
+                if (state == null) {
+                    rows = stmt.all(creator);
+                } else {
+                    rows = stmt.all(creator, state);
+                }
+
+                return rows;    
+            },
+            getReservorTimeSlots: function(reservor, key, state, ascend = true) {
+                let order = ascend ? 'ASC' : 'DESC';
+                const stmt = db.prepare(`SELECT * FROM timeslots WHERE reservor = ? AND state = ? ORDER BY ${key} ${order}`);
+                const rows = stmt.all(reservor, state);
+                return rows;    
+            },
+            reserveTimeSlot: function(id, reservor) {
+                const stmt = db.prepare("UPDATE timeslots SET reservor = ?, state = ? WHERE id = ?");
+                const result = stmt.run(reservor, TimeSlotState.RESERVED, id);
+            }
+        };
+    }
+
+    return {
+        getInstance: function() {
+            if (!instance) {
+                instance = init();
+            }
+            return instance;
+        }
+    };
+})();
+
+// Get an instance of TimeSlotManager
+var timeSlotMgr = TimeSlotManager.getInstance();
+
+// Add initial time slots
+const first = timeSlotMgr.addTimeSlot({  "label": "1st", "creator": vacuum8, "start": Date.now() + (5 * 60 * 1000), "duration": 30, "satsmin": 1100, "quote": 11.234, "currency": "usd"});
+const second = timeSlotMgr.addTimeSlot({ "label": "2nd", "creator": horologger, "start": Date.now() + (8 * 60 * 1000), "duration": 10, "satsmin": 1200, "quote": 12.234, "currency": "usd"});
+const third = timeSlotMgr.addTimeSlot({  "label": "3rd", "creator": horologger, "start": Date.now() + (19 * 60 * 1000), "duration": 20, "satsmin": 1300, "quote": 13.234, "currency": "usd"});
+const fourth = timeSlotMgr.addTimeSlot({ "label": "4th", "creator": horologger, "start": Date.now() + (40 * 60 * 1000), "duration": 30, "satsmin": 1400, "quote": 14.234, "currency": "usd"});
+const fifth = timeSlotMgr.addTimeSlot({  "label": "5th", "creator": vacuum8, "start": Date.now() + (35 * 60 * 1000), "duration": 30, "satsmin": 1500, "quote": 15.234, "currency": "usd"});
 
 // =============================================================================    
 
