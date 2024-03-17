@@ -466,9 +466,15 @@ wsServer.on('connection', (socket, req) => {
             console.log(`relay ${relay.url} has closed`);   
 
         } else if (msg.action == "addTimeSlot") {
-            console.log('Unhandled Action' + msg.action);
+            console.log('addTimeSlot for ' + msg.hpk + " " + msg.start + " " + msg.duration + " " + msg.satsmin + " " + msg.quote);
+            const addedID = timeSlotMgr.addTimeSlot({  "label": "add", "creator": msg.hpk, "start": msg.start, "duration":  msg.duration, "satsmin": msg.satsmin, "quote": msg.quote, "currency": "usd"});
+            console.log('addedID: ' + addedID);
         } else if (msg.action == "delTimeSlot") {
-            console.log('Unhandled Action' + msg.action);
+            console.log('delTimeSlot for ' + msg.hpk + " " + msg.slotID);
+            const result = timeSlotMgr.delTimeSlot(msg.slotID);
+            console.log('deleted...: ' + msg.slotID);
+        } else if (msg.action == "resTimeSlot") {
+            console.log('resTimeSlot for ' + msg.hpk);
         } else if (msg.action == "getTimeSlots") {
             console.log('getTimeSlots for ' + msg.hpk);
             const createdTimeSlots = timeSlotMgr.getCreatorTimeSlots(msg.hpk);
@@ -810,9 +816,11 @@ var TimeSlotManager = (function() {
                 return uuid;
             },
             delTimeSlot: function(uuid) {
+                // First check to make sure it's not reserved!!!
                 // Delete timeslot from the SQLite database using transactions for better-sqlite3
                 const stmt = db.prepare("DELETE FROM timeslots WHERE id = ?");
                 const result = stmt.run(uuid);
+                return result;
             },
             dumpTimeSlots: function(key, ascend = true) {
                 // Retrieve and display timeslots sorted by the specified key

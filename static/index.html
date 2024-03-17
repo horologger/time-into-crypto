@@ -302,15 +302,32 @@
             newCell = newRow.insertCell(ridx++);
             newCell.innerHTML = "&nbsp;";
             newCell = newRow.insertCell(ridx++);
-            if (true) {
-                newCell.innerHTML = "<button onclick='resTSrow(" + tstable.rows.length + ")'  style='visibility: block'>Reserve TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
+            if (hpk != nostrPubKey) {
+                newCell.innerHTML = "<button onclick='resTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block'>Reserve TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
             } else {
-                newCell.innerHTML = "<button onclick='delTSrow(" + tstable.rows.length + ")'  style='visibility: hidden'>Delete TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
+                newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block'>Delete TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
             }
-            // newCell.innerHTML = "<button onclick='delTSrow(" + tstable.rows.length + ")'  style='visibility: block'>Delete TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
-
+ 
         });
     }
+
+    function addTimeSlot(hpk, start, duration, satsmin, quote) {
+        log("addTimeSlot: " + hpk);
+        connection.send(JSON.stringify({action: "addTimeSlot", hpk: hpk, start: start, duration: duration, satsmin: satsmin, quote: quote}));
+    }
+
+    function delTimeSlot(hpk, slotID) {
+        log("delTimeSlot: " + hpk + " slotID: " + slotID);
+        connection.send(JSON.stringify({action: "delTimeSlot", hpk: hpk, slotID: slotID}));
+        getTimeSlots(hpk);
+
+    }
+
+    function resTimeSlot(hpk) {
+        log("resTimeSlot: " + hpk);
+        connection.send(JSON.stringify({action: "resTimeSlot", hpk: hpk}));
+    }
+
 
     function switchMode() {
         log("switchMode");
@@ -513,68 +530,72 @@
                 if (ts_minute < 10) { ts_minute = "0" + ts_minute; }
                 var ts_duration = parseInt((document.getElementById("ts-duration")).value);
                 var ts_satsmin = parseInt((document.getElementById("ts-satsmin")).value);
-                var ts_usd = parseInt((document.getElementById("ts-usd")).value);
+                var ts_usd = parseFloat((document.getElementById("ts-usd")).value);
 
-                var newRow = tstable.insertRow(-1);
-                var ridx = 0;
-                var newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='4' disabled value='" + ts_year + "'/>";
+                var rowDate = new Date(ts_year, ts_month - 1, ts_day, ts_hour, ts_minute, 0, 0);
+                var ts_start = rowDate.getTime();
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "-";
+                addTimeSlot(hpk, ts_start, ts_duration, ts_satsmin, ts_usd);
+                getTimeSlots(hpk);
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_month + "'/>";
+                // var newRow = tstable.insertRow(-1);
+                // var ridx = 0;
+                // var newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "<input type='text' size='4' disabled value='" + ts_year + "'/>";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "-";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "-";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_day + "'/>";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_month + "'/>";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "&nbsp;";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "-";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_hour + "'/>";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_day + "'/>";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = ":";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "&nbsp;";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_minute + "'/>";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_hour + "'/>";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "&nbsp;";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = ":";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='4' disabled value='" + ts_duration + "'/>";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_minute + "'/>";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "&nbsp;";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "&nbsp;";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='6' disabled value='" + ts_satsmin + "'/>";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "<input type='text' size='4' disabled value='" + ts_duration + "'/>";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "&nbsp;";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "&nbsp;";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<input type='text' size='7' disabled value='" + ts_usd + "'/>";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "<input type='text' size='6' disabled value='" + ts_satsmin + "'/>";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "&nbsp;";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "&nbsp;";
 
-                newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "<button onclick='delTSrow(" + tstable.rows.length + ")'  style='visibility: block'>Delete TimeSlot</button>";
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "<input type='text' size='7' disabled value='" + ts_usd + "'/>";
+
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "&nbsp;";
+
+                // newCell = newRow.insertCell(ridx++);
+                // newCell.innerHTML = "<button onclick='delTSrow(" + tstable.rows.length + ")'  style='visibility: block'>Delete TimeSlot</button>";
 
             }
 
-            function delTSrow(rowNum) {
-                console.log("rowNum: " + rowNum);
-                var tstable = document.getElementById("time-slots-table");
-                console.log("tstable.rows.length: " + tstable.rows.length);
-                tstable.deleteRow(-1);
+            function delTSrow(slotID) {
+                console.log("deleting slotID: " + slotID);
+                delTimeSlot(hpk, slotID);
             }
 
             function resTSrow(rowNum) {
