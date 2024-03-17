@@ -214,15 +214,17 @@
             document.getElementById("schedule-link").href = sched_link;
             document.getElementById("schedule-link").innerHTML = "My Schedule Link: " + sched_link;
             if (hpk != nostrPubKey) {
-                document.getElementById("mode-button").innerHTML = "Mode: Reservation";
+                document.getElementById("mode-button").innerHTML = "Reserve TimeSlots";
+                document.getElementById("row00").style.visibility = 'hidden';    // Make Add TimeSlot row hidden
             } else {
-                document.getElementById("mode-button").innerHTML = "Mode: Availablity";
+                document.getElementById("mode-button").innerHTML = "Create TimeSlots";
+                document.getElementById("row00").style.visibility = 'visible';    // Make Add TimeSlot row visible
                 // document.getElementById("mode-button").innerHTML = "Mode: Confirmation";
             }
     }
 
-    function getTimeSlots() {
-        log("getTimeSlots");
+    function getTimeSlots(hpk) {
+        log("getTimeSlots: " + hpk);
         connection.send(JSON.stringify({action: "getTimeSlots", hpk: hpk}));
     }
 
@@ -300,7 +302,12 @@
             newCell = newRow.insertCell(ridx++);
             newCell.innerHTML = "&nbsp;";
             newCell = newRow.insertCell(ridx++);
-            newCell.innerHTML = "<button onclick='delTSrow(" + tstable.rows.length + ")'  style='visibility: block'>Delete TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
+            if (true) {
+                newCell.innerHTML = "<button onclick='resTSrow(" + tstable.rows.length + ")'  style='visibility: block'>Reserve TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
+            } else {
+                newCell.innerHTML = "<button onclick='delTSrow(" + tstable.rows.length + ")'  style='visibility: hidden'>Delete TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
+            }
+            // newCell.innerHTML = "<button onclick='delTSrow(" + tstable.rows.length + ")'  style='visibility: block'>Delete TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
 
         });
     }
@@ -317,7 +324,7 @@
         if (loc_proto == "http:") {
             wsproto = "ws:";
         }
-        connection = new WebSocket(wsproto + "//" + loc_host + "/?" + "shpk=" + hpk + "&" + "rhpk=" + nostrPubKey);
+        connection = new WebSocket(wsproto + "//" + loc_host + "/?" + "eehpk=" + hpk + "&" + "orhpk=" + nostrPubKey);
 
         connection.onopen = () => {
             log("connected");
@@ -326,6 +333,7 @@
             connection.send(JSON.stringify({action: "info", hpk: hpk, relay: relay}));
             document.getElementById("conn-status").style.backgroundColor = "#32d40d";   // green
             setTSdefaults();
+            getTimeSlots(hpk);
         };
 
         connection.onclose = () => {
@@ -561,7 +569,15 @@
                 newCell.innerHTML = "<button onclick='delTSrow(" + tstable.rows.length + ")'  style='visibility: block'>Delete TimeSlot</button>";
 
             }
+
             function delTSrow(rowNum) {
+                console.log("rowNum: " + rowNum);
+                var tstable = document.getElementById("time-slots-table");
+                console.log("tstable.rows.length: " + tstable.rows.length);
+                tstable.deleteRow(-1);
+            }
+
+            function resTSrow(rowNum) {
                 console.log("rowNum: " + rowNum);
                 var tstable = document.getElementById("time-slots-table");
                 console.log("tstable.rows.length: " + tstable.rows.length);
@@ -630,7 +646,7 @@
         <th align="center">USD</th><th align="center">&nbsp;</th>
         <th align="left">Action</th>
     </tr>
-    <tr id="row00" style="font-family: monospace">
+    <tr id="row00" style="font-family: monospace, visibility="hidden">
         <td align="right"><input id="ts-year"     type="text" size="4" value="2024"/></td><td align="center">-</td>
         <td align="right"><input id="ts-month"    type="text" size="2" value="03"/></td><td align="center">-</td>
         <td align="right"><input id="ts-day"      type="text" size="2" value="12"/></td><td align="center">&nbsp;</td>
@@ -752,7 +768,7 @@
             
             // ev = await makeEVto("This is a public message");
 
-            getTimeSlots();
+            getTimeSlots(hpk);
 
 
             disconnect();
@@ -760,7 +776,7 @@
         }
 
         function accountChangedHandler() {
-            // log("Account Changed!");
+            log("Account Changed!");
 
             (async function() {
                 await getNostrPubKey();
@@ -771,7 +787,7 @@
             getHrefParts();
             setScheduleLink();
             // getHrefParts();
-            getTimeSlots();
+            // getTimeSlots(nostrPubKey);   // This will get triggered upon reconnect after account change
 
         }
 

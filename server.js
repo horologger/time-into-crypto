@@ -338,11 +338,11 @@ var client_cnt = 0;
 gsocket = {};   // Table of websocket connections
 gtimeslots = {};   // Table of timeslots for each tenant
 
-function addTimeSlot(tenantid,slot) {
-    if (typeof gtimeslots[tenantid] == "undefined") {
-        gtimeslots[tenantid] = [];
+function addTimeSlot(payee,slot) {
+    if (typeof gtimeslots[payee] == "undefined") {
+        gtimeslots[payee] = [];
     }
-    gtimeslots[tenantid].push(slot);
+    gtimeslots[payee].push(slot);
 }   
 
 
@@ -351,7 +351,7 @@ wsServer.on('connection', (socket, req) => {
     console.log('New Client Joining...');
     console.log(req.url);
     // const searchParams = new URLSearchParams(req.url);
-    // console.log(searchParams.getAll("tenantid"));
+    // console.log(searchParams.getAll("payee"));
     // console.log('token: ' + JSON.stringify(req.url,null,2));
     // const qparts = req.url.split("=");
     // console.log('qparts: ' + JSON.stringify(qparts,null,2));
@@ -359,25 +359,20 @@ wsServer.on('connection', (socket, req) => {
 
     const urlParams = new URLSearchParams((req.url).substring(1,(req.url).length));
 
-    var rhpk = "";
-    if (urlParams.has('rhpk')) {
-        rhpk = urlParams.get('rhpk');
+    var orhpk = "";
+    if (urlParams.has('orhpk')) {
+        orhpk = urlParams.get('orhpk');
     }
-    console.log("rhpk: " + rhpk);
+    console.log("orhpk: " + orhpk);
 
-    var shpk = "";
-    if (urlParams.has('shpk')) {
-        shpk = urlParams.get('shpk');
+    var eehpk = "";
+    if (urlParams.has('eehpk')) {
+        eehpk = urlParams.get('eehpk');
     }
-    console.log("shpk: " + shpk);
+    console.log("eehpk: " + eehpk);
 
-    // if (qparts[0] == "/?tenantid") {
-    //     // socket['tenantid']= qparts[1];
-    // } else {
-    //     socket['tenantid']= 'unknown';
-    // }
-    socket['tenantid']= shpk;
-    socket['receiver']= rhpk;
+    socket['payee']= eehpk;
+    socket['payor']= orhpk;
 
     client_cnt = 0;
     wsServer.clients.forEach(client => {
@@ -392,16 +387,18 @@ wsServer.on('connection', (socket, req) => {
  
     (async () => {
         const retval = (await getPrice("bitcoin", "usd"));
-        bitcoinPrice = retval.data.bitcoin.usd;
-        console.log(bitcoinPrice);
-        const info_event = {
-            type: "price",
-            ticker: "bitcoin",
-            currency: "usd",
-            price: bitcoinPrice
-        };
-        broadcast(JSON.stringify(info_event));
-
+        if ((typeof retval.data == "object") && (typeof retval.data.bitcoin == "object") && (typeof retval.data.bitcoin.usd == "number")) {
+        // if (typeof retval.data.bitcoin.usd == "number") {
+            bitcoinPrice = retval.data.bitcoin.usd;
+            console.log(bitcoinPrice);
+            const info_event = {
+                type: "price",
+                ticker: "bitcoin",
+                currency: "usd",
+                price: bitcoinPrice
+            };
+            broadcast(JSON.stringify(info_event));
+        }
     })();   
     
 
@@ -475,7 +472,12 @@ wsServer.on('connection', (socket, req) => {
         } else if (msg.action == "getTimeSlots") {
             console.log('getTimeSlots for ' + msg.hpk);
             const createdTimeSlots = timeSlotMgr.getCreatorTimeSlots(msg.hpk);
-            broadcast(JSON.stringify({ type: "timeslots", slots: createdTimeSlots}));
+            // broadcast(JSON.stringify({ type: "timeslots", slots: createdTimeSlots}));
+            if ((msg.hpk == eehpk) || (msg.hpk == orhpk)) {
+                notify_listeners(msg.hpk, JSON.stringify({ type: "timeslots", slots: createdTimeSlots}));
+            } else {
+                console.log("No established connection for " + msg.hpk);
+            }
         // } else if (msg.action == "publishTimeSlots") {
         //     console.log('Unhandled Action' + msg.action);
         // } else if (msg.action == "reserveTimeSlot") {
@@ -635,14 +637,27 @@ function sendInvoice(invReq) {
 
 }
 
+function sendSomething() {
+
+    if ((typeof gsocket == "object") && (typeof gsocket.send == "function")) {
+            gsocket.send(JSON.stringify({
+            "type": "invoice",
+            "data": "something"
+        }));
+    } else {
+        console.log('No websockets listening...be sure to have a rates/chat open and connected.');
+    }
+
+}
+
 function broadcast(data) {
 
     var idx = 1;
     var bidx = 1;
     wsServer.clients.forEach(client => {
         // console.log("client: " + JSON.stringify(client, null, 2));
-        console.log("client: " + idx + " " + client.tenantid + " " + client.receiver);
-        if (client.tenantid != 'unknown') {
+        console.log("client: " + idx + " " + client.payee + " " + client.payor);
+        if (client.payee != 'unknown') {
             if (client.readyState === ws.OPEN) {
                 client.send(data);
             }
@@ -653,18 +668,20 @@ function broadcast(data) {
     console.log('broadcasted...to...'+(bidx-1));
 }
 
-global.notify_tenant = function(tenantid,data) {
+global.notify_listeners = function(hpk,data) {
 
     var idx = 1;
+    var nidx = 1;
+    
     wsServer.clients.forEach(client => {
-        // console.log("client: " + JSON.stringify(client, null, 2));
-        console.log("client: " + idx + " " + client.tenantid);
-
-        if ((client.tenantid == tenantid) && (client.readyState === ws.OPEN)) {
+        if (((client.payee == hpk) || (client.payor == hpk))  && (client.readyState === ws.OPEN)) {
+            console.log("client: " + idx + " ee:" + client.payee + " or:" + client.payor);
             client.send(data);
+            nidx++;
         }
         idx++;
     });
+    console.log('notified...'+(nidx-1)+'..of..'+idx);
 }
 
 // =============================================================================    
@@ -720,12 +737,17 @@ pool.on('event', (relay, sub_id, ev) => {
 });
 
 async function getPrice(ids, vs_currencies) {
-
-    let requrl = "https://api.coingecko.com/api/v3/simple/price?ids=" + ids + "&vs_currencies=" + vs_currencies;
+    try {
+        let requrl = "https://api.coingecko.com/api/v3/simple/price?ids=" + ids + "&vs_currencies=" + vs_currencies;
    
-    return await axios.get(requrl);
-
+        return await axios.get(requrl);
+    } catch (error) {
+        console.error("An error occurred while fetching the price:", error);
+        // throw error; // Re-throw the error to propagate it up the call stack
+        return 100000;
+    }
 }
+
 
 var bitcoinPrice = 0;
 (async () => {
@@ -866,7 +888,7 @@ function randomNumber(min, max) {
 }
 
 // --- Uncomment for /socket/chat
-let myVar = setInterval(myTimer, (10 * 1000));
+// let myVar = setInterval(myTimer, (10 * 1000));
 
 function myTimer() {
     const time_event = {
