@@ -215,11 +215,12 @@
             document.getElementById("schedule-link").innerHTML = "My Schedule Link: " + sched_link;
             if (hpk != nostrPubKey) {
                 document.getElementById("mode-button").innerHTML = "Reserve TimeSlots";
-                document.getElementById("row00").style.visibility = 'hidden';    // Make Add TimeSlot row hidden
+                // document.getElementById("row00").style.visibility = 'hidden';    // Make Add TimeSlot row hidden
+                document.getElementById("row00").style.display = "none"; 
             } else {
                 document.getElementById("mode-button").innerHTML = "Create TimeSlots";
-                document.getElementById("row00").style.visibility = 'visible';    // Make Add TimeSlot row visible
-                // document.getElementById("mode-button").innerHTML = "Mode: Confirmation";
+                // document.getElementById("row00").style.visibility = 'visible';    // Make Add TimeSlot row visible
+                // document.getElementById("row00").style.display = "block"; 
             }
     }
 
@@ -245,6 +246,12 @@
         var ridx = 0;
         var newRow = {};
         var newCell = {};
+        if (slots.length == 0) {
+            newRow = tstable.insertRow(-1);
+            newCell = newRow.insertCell(ridx++);
+            newCell.colSpan = 17;
+            newCell.innerHTML = "No TimeSlots Created for: " + hpk.substring(0,8) + "..." + hpk.substring((hpk.length-8),(hpk.length-0)) + " yet.";
+        }
         slots.forEach(function(slot) {
 
             log("slot: " + JSON.stringify(slot, null, 2));
@@ -302,12 +309,27 @@
             newCell = newRow.insertCell(ridx++);
             newCell.innerHTML = "&nbsp;";
             newCell = newRow.insertCell(ridx++);
-            if (hpk != nostrPubKey) {
-                newCell.innerHTML = "<button onclick='resTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block'>Reserve TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
+            if (slot.state == "created") {
+                if (hpk != nostrPubKey) {
+                    newCell.innerHTML = "<button onclick='resTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block'>Reserve TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
+                } else {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block'>Delete TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
+                }
+            } else if (slot.state == "reserved") {
+                if (hpk != nostrPubKey) {
+                    newCell.innerHTML = "<button onclick='resTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; color: black; background-color: #fafa88' disabled>Awaiting Confirmation</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.reservor).substring(0,8);
+                } else {
+                    newCell.innerHTML = "<button onclick='cnfTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #fafa88'>Confirm Reservation</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.reservor).substring(0,8);
+                }
+            } else if (slot.state == "confirmed") {
+                if (hpk != nostrPubKey) {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; color: black; background-color: #d0f0d0' disabled>Confirmed Reservation</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8);  // Maybe a countdown timer to the start of the slot
+                } else {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0f0d0' >Confirmed Reservation</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
+                }
             } else {
-                newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block'>Delete TimeSlot</button> slot.id: " + slot.id + " slot.state: " + slot.state;
+                console.log("Unhandled slot state: " + slot.state + " for slot.id: " + slot.id);
             }
- 
         });
     }
 
@@ -316,16 +338,22 @@
         connection.send(JSON.stringify({action: "addTimeSlot", hpk: hpk, start: start, duration: duration, satsmin: satsmin, quote: quote}));
     }
 
-    function delTimeSlot(hpk, slotID) {
-        log("delTimeSlot: " + hpk + " slotID: " + slotID);
-        connection.send(JSON.stringify({action: "delTimeSlot", hpk: hpk, slotID: slotID}));
+    function delTimeSlot(deletor_hpk, slotID) {
+        log("delTimeSlot: " + deletor_hpk + " slotID: " + slotID);
+        connection.send(JSON.stringify({action: "delTimeSlot", hpk: deletor_hpk, slotID: slotID}));
         getTimeSlots(hpk);
-
     }
 
-    function resTimeSlot(hpk) {
-        log("resTimeSlot: " + hpk);
-        connection.send(JSON.stringify({action: "resTimeSlot", hpk: hpk}));
+    function resTimeSlot(reservor_hpk, slotID) {
+        log("resTimeSlot: " + hpk + " by " + reservor_hpk + " slotID: " + slotID);
+        connection.send(JSON.stringify({action: "resTimeSlot", hpk: reservor_hpk, slotID: slotID}));
+        getTimeSlots(hpk);  // This is the global hpk of the other user's slots currnetly being viewed
+    }
+
+    function cnfTimeSlot(hpk, slotID) {
+        log("cnfTimeSlot: " + hpk + " slotID: " + slotID);
+        connection.send(JSON.stringify({action: "cnfTimeSlot", hpk: hpk, slotID: slotID}));
+        getTimeSlots(hpk);
     }
 
 
@@ -598,11 +626,14 @@
                 delTimeSlot(hpk, slotID);
             }
 
-            function resTSrow(rowNum) {
-                console.log("rowNum: " + rowNum);
-                var tstable = document.getElementById("time-slots-table");
-                console.log("tstable.rows.length: " + tstable.rows.length);
-                tstable.deleteRow(-1);
+            function resTSrow(slotID) {
+                console.log("reserving slotID: " + slotID + " for " + nostrPubKey);
+                resTimeSlot(nostrPubKey, slotID);
+            }
+
+            function cnfTSrow(slotID) {
+                console.log("confirming slotID: " + slotID + " from " + nostrPubKey);
+                cnfTimeSlot(nostrPubKey, slotID);
             }
 
             function isNumberKey(evt) {

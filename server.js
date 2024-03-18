@@ -34,6 +34,7 @@ const TimeSlotState = {
     CREATED: 'created',
     AVAILABLE: 'available',
     RESERVED: 'reserved',
+    CONFIRMED: 'confirmed',
     REJECTED: 'rejected',
     CANCELED: 'canceled',
     LATE_CREATOR: 'late_creator',
@@ -474,7 +475,13 @@ wsServer.on('connection', (socket, req) => {
             const result = timeSlotMgr.delTimeSlot(msg.slotID);
             console.log('deleted...: ' + msg.slotID);
         } else if (msg.action == "resTimeSlot") {
-            console.log('resTimeSlot for ' + msg.hpk);
+            console.log('resTimeSlot for ' + msg.hpk + " " + msg.slotID);
+            const result = timeSlotMgr.resTimeSlot(msg.slotID, msg.hpk);
+            console.log('reserved...: ' + msg.slotID);
+        } else if (msg.action == "cnfTimeSlot") {
+            console.log('cnfTimeSlot for ' + msg.hpk + " " + msg.slotID);
+            const result = timeSlotMgr.cnfTimeSlot(msg.slotID, msg.hpk);
+            console.log('confirmed...: ' + msg.slotID);
         } else if (msg.action == "getTimeSlots") {
             console.log('getTimeSlots for ' + msg.hpk);
             const createdTimeSlots = timeSlotMgr.getCreatorTimeSlots(msg.hpk);
@@ -758,7 +765,11 @@ async function getPrice(ids, vs_currencies) {
 var bitcoinPrice = 0;
 (async () => {
     const retval = (await getPrice("bitcoin", "usd"));
-    bitcoinPrice = retval.data.bitcoin.usd;
+    if (typeof retval.data == "object" && typeof retval.data.bitcoin == "object" && typeof retval.data.bitcoin.usd == "number") {
+        bitcoinPrice = retval.data.bitcoin.usd;
+    } else {
+        bitcoinPrice = 100000;
+    }
     console.log(bitcoinPrice);
 })();   
 
@@ -793,6 +804,7 @@ async function make_dm_event(emsg, pubkey) {
 
 // =============================================================================    
 
+  
 // Singleton pattern implementation for TimeSlotManager
 var TimeSlotManager = (function() {
     var instance;
@@ -820,6 +832,20 @@ var TimeSlotManager = (function() {
                 // Delete timeslot from the SQLite database using transactions for better-sqlite3
                 const stmt = db.prepare("DELETE FROM timeslots WHERE id = ?");
                 const result = stmt.run(uuid);
+                return result;
+            },
+            resTimeSlot: function(uuid, reservor) {
+                // First check to make sure it's not deleted!!!
+                // Update timeslot from the SQLite database using transactions for better-sqlite3 such that reservor = reservor and state = TimeSlotState.RESERVED
+                const stmt = db.prepare("UPDATE timeslots SET state = ?, reservor = ? WHERE id = ?");
+                const result = stmt.run(TimeSlotState.RESERVED,reservor,uuid);
+                return result;
+            },
+            cnfTimeSlot: function(uuid, creator) {
+                // First check to make sure it's not deleted!!!
+                // Update timeslot from the SQLite database using transactions for better-sqlite3 such that reservor = reservor and state = TimeSlotState.RESERVED
+                const stmt = db.prepare("UPDATE timeslots SET state = ? WHERE id = ?");
+                const result = stmt.run(TimeSlotState.CONFIRMED,uuid);
                 return result;
             },
             dumpTimeSlots: function(key, ascend = true) {
