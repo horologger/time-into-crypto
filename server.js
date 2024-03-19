@@ -41,16 +41,16 @@ const TimeSlotState = {
     LATE_RESERVOR: 'late_reservor',
     NOSHOW_CREATOR: 'noshow_creator',
     NOSHOW_RESERVOR: 'noshow_reservor',
+    IN_PROGRESS: 'in_progress',
     PAUSED_CREATOR: 'paused_creator',
     PAUSED_RESERVOR: 'paused_reservor',
-    INPROGRESS: 'in_progress',
     GOING_LONG: 'going_long',
     COMPLETE: 'complete',
     EXPIRED: 'expired',
     REFUNDED: 'refunded'
 };
   
-  // Initial time slot data
+// Initial time slot data
 const timeslot = {
     "id": "unknown",
     "label": "unknown",
@@ -64,9 +64,29 @@ const timeslot = {
     "state": TimeSlotState.CREATED
 };
   
+// Enum structure for slot states
+const EventState = {
+    ACTIVE: 'active',
+    TRIGGERED: 'triggered',
+    PROCESSED: 'processed'
+};
+  
+
+// Initial time slot data
+const event = {
+    "id": "unknown",
+    "label": "unknown",
+    "creator": "unknown",
+    "reservor": "unknown",
+    "trigger": Date.now() + d60mins,
+    "data": "{}",
+    "state": TimeSlotState.ACTIVE
+};
+  
 
 // Creating timeslots table in the SQLite database
 db.exec("CREATE TABLE timeslots (id TEXT, label TEXT, created INTEGER, creator TEXT, reservor TEXT, start INTEGER, duration INTEGER, satsmin INTEGER, quote REAL, currency TEXT, state INTEGER)");
+db.exec("CREATE TABLE events (id TEXT, label TEXT, created INTEGER, creator TEXT, reservor TEXT, trigger INTEGER, data TEXT, state INTEGER)");
 
 
 const {authenticatedLndGrpc} = require('ln-service');
@@ -465,6 +485,19 @@ wsServer.on('connection', (socket, req) => {
             await relay.publish(msg.event);
             relay.close();
             console.log(`relay ${relay.url} has closed`);   
+
+        } else if (msg.action == "defer") {
+            console.log('Defer: ' + "to " + msg.relay);
+            console.log('msg: ' + "to " + msg.msg);
+
+            console.log(JSON.stringify(msg,null,2));
+
+            // const relay = new nt.Relay(msg.relay);
+            // await relay.connect();
+            // console.log(`connected to ${relay.url}`)
+            // await relay.publish(msg.event);
+            // relay.close();
+            // console.log(`relay ${relay.url} has closed`);   
 
         } else if (msg.action == "addTimeSlot") {
             console.log('addTimeSlot for ' + msg.hpk + " " + msg.start + " " + msg.duration + " " + msg.satsmin + " " + msg.quote);
@@ -916,20 +949,122 @@ const fifth = timeSlotMgr.addTimeSlot({  "label": "5th", "creator": vacuum8, "st
 
 // =============================================================================    
 
+  
+// Singleton pattern implementation for EventManager
+var EventManager = (function() {
+    var instance;
+
+    function init() {
+        // Private methods and variables
+        return {
+            addEvent: function(event) {
+                // Generate unique ID and set creation timestamp
+                var uuid = uid.sync(8);
+                event.id = uuid;
+                event.created = Date.now();
+                console.log("uuid: " + uuid);
+                event.reservor = "unknown";
+                event.state = EventState.ACTIVE;
+                
+                // Insert event into the SQLite database using transactions for better-sqlite3
+                const stmt = db.prepare("INSERT INTO events VALUES (@id, @label, @created, @creator, @reservor, @trigger, @data, @state)");
+                const result = stmt.run(event);
+                
+                return uuid;
+            },
+            delEvent: function(uuid) {
+                // First check to make sure it's not reserved!!!
+                // Delete event from the SQLite database using transactions for better-sqlite3
+                const stmt = db.prepare("DELETE FROM events WHERE id = ?");
+                const result = stmt.run(uuid);
+                return result;
+            },
+            dumpEvents: function(key, ascend = true) {
+                // Retrieve and display events sorted by the specified key
+                let order = ascend ? 'ASC' : 'DESC';
+                const stmt = db.prepare(`SELECT * FROM events ORDER BY ${key} ${order}`);
+                const rows = stmt.all();
+                rows.forEach(row => {
+                    console.log(`uuid: ${row.id} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} trigger: ${row.trigger}`);
+                });
+            },
+            getFutureEvents: function(key, ascend = true, timeNow) {
+                let order = ascend ? 'ASC' : 'DESC';
+                const stmt = db.prepare(`SELECT * FROM events WHERE trigger >= ${timeNow} ORDER BY ${key} ${order}`);
+                const rows = stmt.all();
+                return rows;    
+            },
+            getActiveEvents: function(key, ascend = true) {
+                let order = ascend ? 'ASC' : 'DESC';
+                const stmt = db.prepare(`SELECT * FROM events WHERE state = 'active' ORDER BY ${key} ${order}`);
+                const rows = stmt.all();
+                return rows;    
+            },
+            getAllEvents: function(key, ascend = true) {
+                let order = ascend ? 'ASC' : 'DESC';
+                const stmt = db.prepare(`SELECT * FROM events ORDER BY ${key} ${order}`);
+                const rows = stmt.all();
+                return rows;    
+            },
+            setEventState: function(id, newState) {
+                const stmt = db.prepare("UPDATE events SET state = ? WHERE id = ?");
+                const result = stmt.run(newState, id);
+            }
+        };
+    }
+
+    return {
+        getInstance: function() {
+            if (!instance) {
+                instance = init();
+            }
+            return instance;
+        }
+    };
+})();
+
+// Get an instance of EventManager
+var eventMgr = EventManager.getInstance();
+
+// Add initial events
+const ev1 = eventMgr.addEvent({  "label": "4later", "creator": "unknown", "trigger": Math.floor(Date.now()/1000) + (1 * 15), "data": JSON.stringify({action: "info", hpk: "unknown", relay: "ws://localhost:8080"})});
+
+const ev2 = eventMgr.addEvent({  "label": "in30s", "creator": "unknown", "trigger": Math.floor(Date.now()/1000) + (1 * 30), "data": JSON.stringify({action: "info", hpk: "unknown", relay: "ws://localhost:8080"})});
+
+function processOutbox(timeNow) {
+    // Get all events in the future
+    const futureEvents = eventMgr.getActiveEvents("trigger", true);
+    futureEvents.forEach(event => {
+        // console.log("future event: " + JSON.stringify(event));
+        console.log(event.trigger + " <= " + timeNow);
+        if (event.trigger <= timeNow) {
+            // Process the event
+            console.log("Triggering event: " + event.id + " " + event.label);
+            eventMgr.setEventState(event.id, EventState.TRIGGERED);
+        }
+    });
+
+}
+
+// =============================================================================    
+
 // Function to generate random number
 function randomNumber(min, max) {
     return Math.floor(Math.random() * (max - min) + min);
 }
 
 // --- Uncomment for /socket/chat
-// let myVar = setInterval(myTimer, (10 * 1000));
+let myVar = setInterval(myTimer, (10 * 1000));
 
 function myTimer() {
+    const now = Math.round((new Date()).getTime() / 1000);
     const time_event = {
         type: "time",
-        time: Math.round((new Date()).getTime() / 1000),
+        time: now,
     };
     broadcast(JSON.stringify(time_event));
+
+    processOutbox(now);
 }
 
 server.on('upgrade', (request, socket, head) => {
