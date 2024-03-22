@@ -160,6 +160,8 @@
     var hpk = "aaabbb";
     var relay = "wss://relay.primal.net"
 
+    var inProcessSlotID = "unknown";
+
     function getHrefParts() {
         log("getHrefParts");
         loc_href = window.document.location.href;
@@ -237,6 +239,11 @@
         }
     }
 
+    function hexAddrShorten(addr, len = 8) {
+        return (addr.substring(0,len) + "..." + addr.substring((addr.length-len),(addr.length-0)));
+    }
+
+
     function redrawTimeSlots(slots) {
         log("redrawTimeSlots");
         clearTimeSlots();
@@ -250,13 +257,13 @@
             newRow = tstable.insertRow(-1);
             newCell = newRow.insertCell(ridx++);
             newCell.colSpan = 17;
-            newCell.innerHTML = "No TimeSlots Created for: " + hpk.substring(0,8) + "..." + hpk.substring((hpk.length-8),(hpk.length-0)) + " yet.";
+            newCell.innerHTML = "No TimeSlots Created for: " + hexAddrShorten(hpk) + " yet.";
         }
         slots.forEach(function(slot) {
 
             log("slot: " + JSON.stringify(slot, null, 2));
             ridx = 0;
-            var sDate = new Date(slot.start);
+            var sDate = new Date(parseInt(slot.start) * 1000);
             var ts_year = sDate.getFullYear();
             var ts_month = sDate.getMonth() + 1;
             if (ts_month < 10) { ts_month = "0" + ts_month; }
@@ -268,6 +275,7 @@
             if (ts_minute < 10) { ts_minute = "0" + ts_minute; }
             var sDuration = parseInt(slot.duration);
 
+            const confDateTime = ts_year + "-" + ts_month + "-" + ts_day + " " + ts_hour + ":" + ts_minute;
 
             // Need satsmin and usd for checking if the price is still acceptable
 
@@ -319,7 +327,7 @@
                 if (hpk != nostrPubKey) {
                     newCell.innerHTML = "<button onclick='resTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; color: black; background-color: #fafa88' disabled>Awaiting Confirmation</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.reservor).substring(0,8);
                 } else {
-                    newCell.innerHTML = "<button onclick='cnfTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #fafa88'>Confirm Reservation</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.reservor).substring(0,8);
+                    newCell.innerHTML = "<button onclick='cnfTSrow(" + '"' + slot.id + '",' + '"' + slot.start + '",' + '"' + confDateTime + '",' + '"' + slot.reservor + '"' + ")'  style='visibility: block; background-color: #fafa88'>Confirm Reservation</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.reservor).substring(0,8);
                 }
             } else if (slot.state == "confirmed") {
                 if (hpk != nostrPubKey) {
@@ -327,6 +335,20 @@
                 } else {
                     newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0f0d0' >Confirmed Reservation</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
                 }
+            } else if (slot.state == "in_progress") {
+                if (hpk != nostrPubKey) {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; color: black; background-color: #d0d0d0' disabled>In Progress</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8);  // Maybe a countdown timer to the start of the slot
+                } else {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0d0d0' >In Progress</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
+                }
+                inProcessSlotID = slot.id;
+            } else if (slot.state == "completed") {
+                if (hpk != nostrPubKey) {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; color: black; background-color: #d0d0d0' disabled>Completed</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8);  // Maybe a countdown timer to the start of the slot
+                } else {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0d0d0' >Completed</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
+                }
+                document.getElementById("session-message").innerHTML = "Session Completed";
             } else {
                 console.log("Unhandled slot state: " + slot.state + " for slot.id: " + slot.id);
             }
@@ -347,15 +369,87 @@
     function resTimeSlot(reservor_hpk, slotID) {
         log("resTimeSlot: " + hpk + " by " + reservor_hpk + " slotID: " + slotID);
         connection.send(JSON.stringify({action: "resTimeSlot", hpk: reservor_hpk, slotID: slotID}));
-        getTimeSlots(hpk);  // This is the global hpk of the other user's slots currnetly being viewed
+        var msg = hexAddrShorten(reservor_hpk) + " requests you confirm this registration. \n";
+        msg += "slotID:" + slotID + " \n";
+        msg += "Use the link below to confirm: \n";
+        msg += `${loc_http}/?relay=${relay}\n`;
+
+        postDMto(msg, hpk).then((response) => {
+            console.log("response: " + response);
+            getTimeSlots(hpk);  // This is the global hpk of the other user's slots currnetly being viewed
+        }).catch((error) => {
+            console.error("error: " + error);
+        })
     }
 
-    function cnfTimeSlot(hpk, slotID) {
+    function cnfTimeSlot(hpk, slotID, slotStart, dateTimeStr, reservor) {
         log("cnfTimeSlot: " + hpk + " slotID: " + slotID);
         connection.send(JSON.stringify({action: "cnfTimeSlot", hpk: hpk, slotID: slotID}));
-        getTimeSlots(hpk);
+        var msg = "Your reservation has been confirmed. \n";
+        msg += "slotID:" + slotID + " \n";
+        msg += "Use the link below five minutes before " + dateTimeStr + " to join: \n";
+        msg += `${loc_http}/?relay=${relay}\n`;
+
+        const startDate = Math.floor(parseInt(slotStart)/1000);
+        console.log("startDate: " + startDate);
+        const startDateIn1Day = startDate - (24 * 60 * 60);
+        const startDateIn1Hr = startDate - (60 * 60);
+        // const startDateIn5Mins = startDate - (5 * 60);
+        // For testing, set the start time to 5 minutes from now
+        // const startDateIn1Day = startDate - (60);
+        // const startDateIn1Hr = startDate - (30);
+        const startDateIn5Mins = startDate - (15);
+        postDMto(msg, reservor).then((response) => {
+            // console.log("response: " + response);
+            // getTimeSlots(hpk);  // This is the global hpk of the other user's slots currnetly being viewed
+            msg = "Your reservation for tomorrow has been confirmed. \n";
+            msg += "slotID:" + slotID + " \n";
+            msg += "Use the link below five minutes before " + dateTimeStr + " to join: \n";
+            msg += `${loc_http}/?relay=${relay}\n`;
+            deferDMto(msg, reservor, startDateIn1Day).then((response) => {
+                // console.log("response: " + response);
+                // getTimeSlots(hpk);  // This is the global hpk of the other user's slots currnetly being viewed
+                msg = "Your reservation time is in one hour. \n";
+                msg += "slotID:" + slotID + " \n";
+                msg += "Use the link below five minutes before " + dateTimeStr + " to join: \n";
+                msg += `${loc_http}/?relay=${relay}\n`;
+                deferDMto(msg, reservor, startDateIn1Hr).then((response) => {
+                    // console.log("response: " + response);
+                    msg = "Your reservation time is in five minutes. \n";
+                    msg += "slotID:" + slotID + " \n";
+                    msg += "Use the link below to join: \n";
+                    msg += `${loc_http}/?relay=${relay}\n`;
+                    deferDMto(msg, reservor, startDateIn5Mins).then((response) => {
+                        // console.log("response: " + response);
+                        getTimeSlots(hpk);  // This is the global hpk of the other user's slots currnetly being viewed
+                    }).catch((error) => {
+                        console.error("error: " + error);
+                    })
+                }).catch((error) => {
+                    console.error("error: " + error);
+                })
+            }).catch((error) => {
+                console.error("error: " + error);
+            })
+        }).catch((error) => {
+            console.error("error: " + error);
+        })
     }
 
+    function doPause() {
+        log("doPause");
+        connection.send(JSON.stringify({action: "pause", hpk: hpk, pauser: nostrPubKey, slotID: inProcessSlotID}));
+    }   
+
+    function doResume() {
+        log("doResume");
+        connection.send(JSON.stringify({action: "resume", hpk: hpk, resumer: nostrPubKey, slotID: inProcessSlotID}));
+    }
+
+    function doEnd() {
+        log("doEnd");
+        connection.send(JSON.stringify({action: "end", hpk: hpk, ender: nostrPubKey, slotID: inProcessSlotID}));
+    }   
 
     function switchMode() {
         log("switchMode");
@@ -409,12 +503,54 @@
                     document.getElementById("receiver-info").innerHTML = json.info;
                 } else if (json.type == "time"){
                     document.getElementById("server-time").innerHTML = json.time;
+                    setTSdefaults();    // Enable for testing, but not needed
                 } else if (json.type == "price"){
                     bitcoinPrice = parseInt(json.price);
                     document.getElementById("webln-div").innerHTML = bitcoinPrice;
                     recalcUSD("recalc");
                 } else if (json.type == "timeslots"){
                     redrawTimeSlots(json.slots);
+                } else if (json.type == "pending-session"){
+                    log("pending-session: in " + json.insecs);
+                    document.getElementById("session-message").innerHTML = "Session starting in " + json.insecs + " seconds";
+                } else if (json.type == "in-progress"){
+                    log("in-progress: for " + json.forsecs);
+                    document.getElementById("session-message").innerHTML = "Session in progress for " + json.forsecs + " seconds" + " " + json.nextInvoice + " " + json.secsremaining + " " + json.durperc + " " + json.invperc + " " + json.invsoon + " " + json.invnow;
+                    document.getElementById("session-controls").style.display = "block";
+                    document.getElementById("session-progress").style.width = json.durperc + "%";
+                    document.getElementById("session-progress").style.backgroundColor = "#bee35f";   // green
+                    document.getElementById("invoice-countdown").style.width = json.invperc + "%";
+                    log ("invsoon: " + json.invsoon);
+                    if (json.invsoon) {
+                        document.getElementById("invoice-countdown").style.backgroundColor = "#e3e35f";   // yellow
+                    } else {
+                        document.getElementById("invoice-countdown").style.backgroundColor = "#bee35f";   // green
+                    }
+                    if (json.invnow) {
+                        document.getElementById("invoice").innerHTML = "Invoice Sent!";
+                    } else {
+                        document.getElementById("invoice").innerHTML = "Awaiting Next Invoice...";
+                    }
+
+                    // getTimeSlots(hpk);
+                } else if (json.type == "completed"){
+                    log("completed: ");
+                    document.getElementById("session-message").innerHTML = "Session had ended";
+                    document.getElementById("session-controls").style.display = "none";
+                    document.getElementById("session-progress").style.width = json.durperc + "%";
+                    document.getElementById("session-progress").style.backgroundColor = "#e6e6e6";   // gray
+                    document.getElementById("invoice-countdown").style.backgroundColor = "#e6e6e6";   // gray
+                    getTimeSlots(hpk);
+
+                } else if (json.type == "paused"){
+                    // yoda: "Paused, the session is."
+                    sessionPaused();
+                } else if (json.type == "resumed"){
+                    // yoda: "Resumed, the session is."
+                    sessionResumed();
+                } else if (json.type == "ended"){
+                    // yoda: "Ended, the session is."
+                    sessionEnded();
                 } else {
                     log(event.data);
                 }
@@ -549,13 +685,9 @@
                 var tstable = document.getElementById("time-slots-table");
                 var ts_year = parseInt((document.getElementById("ts-year")).value);
                 var ts_month = parseInt((document.getElementById("ts-month")).value);
-                if (ts_month < 10) { ts_month = "0" + ts_month; }
                 var ts_day = parseInt((document.getElementById("ts-day")).value);
-                if (ts_day < 10) { ts_day = "0" + ts_day; }
                 var ts_hour = parseInt((document.getElementById("ts-hour")).value);
-                if (ts_hour < 10) { ts_hour = "0" + ts_hour; }
                 var ts_minute = parseInt((document.getElementById("ts-minute")).value);
-                if (ts_minute < 10) { ts_minute = "0" + ts_minute; }
                 var ts_duration = parseInt((document.getElementById("ts-duration")).value);
                 var ts_satsmin = parseInt((document.getElementById("ts-satsmin")).value);
                 var ts_usd = parseFloat((document.getElementById("ts-usd")).value);
@@ -563,61 +695,11 @@
                 var rowDate = new Date(ts_year, ts_month - 1, ts_day, ts_hour, ts_minute, 0, 0);
                 var ts_start = rowDate.getTime();
 
+                ts_start = Math.floor(ts_start / 1000);
+
                 addTimeSlot(hpk, ts_start, ts_duration, ts_satsmin, ts_usd);
                 getTimeSlots(hpk);
 
-                // var newRow = tstable.insertRow(-1);
-                // var ridx = 0;
-                // var newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "<input type='text' size='4' disabled value='" + ts_year + "'/>";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "-";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_month + "'/>";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "-";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_day + "'/>";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "&nbsp;";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_hour + "'/>";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = ":";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_minute + "'/>";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "&nbsp;";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "<input type='text' size='4' disabled value='" + ts_duration + "'/>";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "&nbsp;";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "<input type='text' size='6' disabled value='" + ts_satsmin + "'/>";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "&nbsp;";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "<input type='text' size='7' disabled value='" + ts_usd + "'/>";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "&nbsp;";
-
-                // newCell = newRow.insertCell(ridx++);
-                // newCell.innerHTML = "<button onclick='delTSrow(" + tstable.rows.length + ")'  style='visibility: block'>Delete TimeSlot</button>";
 
             }
 
@@ -631,9 +713,9 @@
                 resTimeSlot(nostrPubKey, slotID);
             }
 
-            function cnfTSrow(slotID) {
-                console.log("confirming slotID: " + slotID + " from " + nostrPubKey);
-                cnfTimeSlot(nostrPubKey, slotID);
+            function cnfTSrow(slotID, slotStart, slotDateStr, reservor) {
+                console.log("confirming slotID: " + slotID + " from " + nostrPubKey + " at " + slotDateStr + " for " + reservor);
+                cnfTimeSlot(nostrPubKey, slotID, slotStart, slotDateStr, reservor);
             }
 
             function isNumberKey(evt) {
@@ -665,7 +747,9 @@
             function setTSdefaults() {
 
                 const n = new Date();
-                const d = new Date(n.getTime() + (60 * 60 * 1000 * 2) + (29 * 60 * 1000));  // 2 hours and 29 minutes from now
+                // const d = new Date(n.getTime() + (60 * 60 * 1000 * 24) + (29 * 60 * 1000));  // 24 hours and 29 minutes from now
+                // Testing with 1 minute from now
+                const d = new Date(n.getTime() + (1 * 60 * 1000));  // 1 minutes from now
                 var y = d.getFullYear();
                 var m = d.getMonth() + 1;
                 if (m < 10) { m = "0" + m; }
@@ -674,7 +758,8 @@
                 var h = d.getHours();
                 if (h < 10) { h = "0" + h; }
                 var min = d.getMinutes();
-                if (min > 30) { min = "30"; } else { min = "00"; }
+                // Testing, don't allow minutes to be 30
+                // if (min > 30) { min = "30"; } else { min = "00"; }
                 // console.log("y: " + y + " m: " + m + " day: " + day + " h: " + h + " min: " + min);
 
                 var ts_year = document.getElementById("ts-year"); ts_year.value = y;
@@ -684,6 +769,80 @@
                 var ts_minute = document.getElementById("ts-minute"); ts_minute.value = min;
  
             }
+
+            function sessionPaused() {
+                const sP = document.getElementById("session-pause");
+                const sR = document.getElementById("session-resume");
+                const sS = document.getElementById("session-stop");
+                const sT = document.getElementById("session-terminate");
+                const prog = document.getElementById("session-progress");
+                sP.disabled = true;
+                sR.disabled = false;
+                sS.disabled = false;
+                sT.disabled = true;
+                prog.style.backgroundColor = "#e3e35f";
+            }
+
+            function sessionPause() {
+                log("sessionPause");
+                sessionPaused()
+                doPause();
+            }
+
+            function sessionResumed() {
+                const sP = document.getElementById("session-pause");
+                const sR = document.getElementById("session-resume");
+                const sS = document.getElementById("session-stop");
+                const sT = document.getElementById("session-terminate");
+                const prog = document.getElementById("session-progress");
+                sP.disabled = false;
+                sR.disabled = true;
+                sS.disabled = true;
+                sT.disabled = true;
+                sT.style.visibility = "hidden";
+                prog.style.backgroundColor = "#bee35f";
+            }
+
+            function sessionResume() {
+                log("sessionResume");
+                sessionResumed();
+                doResume();
+            }
+
+            function sessionStop() {
+                log("sessionStop");
+                const sP = document.getElementById("session-pause");
+                const sR = document.getElementById("session-resume");
+                const sS = document.getElementById("session-stop");
+                const sT = document.getElementById("session-terminate");
+                const prog = document.getElementById("session-progress");
+                sP.disabled = true;
+                sR.disabled = false;
+                sS.disabled = true;
+                sT.disabled = false;
+                sT.style.visibility = "visible";
+                prog.style.backgroundColor = "#e98383";
+            }
+
+            function sessionEnded() {
+                const sP = document.getElementById("session-pause");
+                const sR = document.getElementById("session-resume");
+                const sS = document.getElementById("session-stop");
+                const sT = document.getElementById("session-terminate");
+                const prog = document.getElementById("session-progress");
+                sP.disabled = true;
+                sR.disabled = true;
+                sS.disabled = true;
+                sT.disabled = true;
+                sT.style.visibility = "hidden";
+                prog.style.backgroundColor = "#e6e6e6";
+            }
+            
+            function sessionTerminate() {
+                log("sessionTerminate");
+                sessionEnded();
+                doEnd();
+            }   
 
     </script>
     <table id="time-slots-table" border="0" cellspacing="0" cellpadding="0">
@@ -704,7 +863,7 @@
         <td align="right"><input id="ts-day"      type="text" size="2" value="12"/></td><td align="center">&nbsp;</td>
         <td align="right"><input id="ts-hour"     type="text" size="2" value="13"/></td><td align="center">:</td>
         <td align="right"><input id="ts-minute"   type="text" size="2" value="00"/></td><td align="center">&nbsp;</td>
-        <td align="right"><input id="ts-duration" type="text" size="4" value="30" style="text-align: right;" onkeypress="return recalcUSD(event)" /></td><td align="center">&nbsp;</td>
+        <td align="right"><input id="ts-duration" type="text" size="4" value="5" style="text-align: right;" onkeypress="return recalcUSD(event)" /></td><td align="center">&nbsp;</td>
         <td align="right"><input id="ts-satsmin"  type="text" size="6" value="1000" style="text-align: right;" onkeypress="return recalcUSD(event)" /></td><td align="center">&nbsp;</td>
         <td align="center"><input id="ts-usd"     type="text" size="7" value="calc" disabled style="text-align: right;"/></td><td align="center">&nbsp;</td>
         <td align="left">
@@ -715,6 +874,16 @@
     </table>
 
     <p id="demo"></p>
+
+    <div id="session-controls" style="display: none;">
+    <div id="session-progress" style="background-color: #e6e6e6; position: relative; top: 0; left: 0; width: 100%; height: 4px; "></div>
+    <button id="session-pause" style="background-color: #e3e35f; visibility: visible;" onclick="sessionPause()">Pause</button>
+    <button id="session-resume" style="background-color: #bee35f; visibility: visible;" onclick="sessionResume()" disabled>Resume</button>
+    <button id="session-stop" style="background-color: #e98383; visibility: visible;" onclick="sessionStop()" disabled>Stop</button>
+    <button id="session-terminate" style="background-color: #ff0000; visibility: hidden;" onclick="sessionTerminate()" disabled>Confirm Termination of Session</button>
+    <div id="invoice-countdown" style="background-color: #e6e6e6; position: relative; top: 0; left: 0; width: 100%; height: 4px;"></div>
+    </div>
+    <p id="session-message">No Session Message Yet!</p>
 
     <button onclick="myVar = setInterval(myTimer ,1000)">Start Timer</button>
     <button onclick="clearInterval(myVar)">Stop Timer</button>
@@ -811,12 +980,12 @@
 
             
             if (hpk != nostrPubKey) {
-                const damsg = "I'm checking out your timeslots. " + Math.floor(Math.random() * 100);
+                var damsg = "I'm checking out your timeslots. " + Math.floor(Math.random() * 100);
                 log(damsg)
-                dm = await makeDMto(damsg, hpk); // to Receiver
+                dm = await postDMto(damsg, hpk); // to Receiver
             }
-            // dm = await makeDMto("This is a secret to horologger " + Math.floor(Math.random() * 10), "6771ce6cf4a229db78fa8fcf092c943580d186145baa1218b60070f116ba99ff"); // to Horologger
-            // dm = await makeDMto("This is a secret to vacuum8 " + Math.floor(Math.random() * 10), "7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5"); // to Vacuum8
+            // dm = await postDMto("This is a secret to horologger " + Math.floor(Math.random() * 10), "6771ce6cf4a229db78fa8fcf092c943580d186145baa1218b60070f116ba99ff"); // to Horologger
+            // dm = await postDMto("This is a secret to vacuum8 " + Math.floor(Math.random() * 10), "7bdef7f39298dc57996c9b7adc08db1eeaf02208437ba01bf4cbe2e8c17a72a5"); // to Vacuum8
             
             // ev = await makeEVto("This is a public message");
 
@@ -850,23 +1019,45 @@
             log('nostr not supported'); 
         }
 
-        async function makeDMto(msg, pubkey) {
-            log("makeDMto: " + msg + " to " + pubkey);
+        async function deferDMto(msg, pubkey, notify_time) {
+            log("deferDMto: " + msg + " to " + pubkey + " notify_time: " + notify_time);
+            // GenAI suggested this
+            // return new Promise((resolve, reject) => {
+            //     setTimeout(() => {
+            //         resolve(postDMto(msg, pubkey, trigger));
+            //     }, 1000);
+            // });
+
+            return await postDMto(msg, pubkey, notify_time);
+        }
+
+        async function postDMto(msg, pubkey, notify_time = 0) {
+            log("postDMto: " + msg + " to " + pubkey);
             const encrypted = await window.nostr.nip04.encrypt(pubkey, msg);
+            const now = Math.round((new Date()).getTime() / 1000);
+            var deferred_time = now;
+            var action = "post";
+            if (notify_time > 0) {
+                deferred_time = notify_time;
+                action = "defer";
+            }
+
             const event = {
-                created_at: Math.round((new Date()).getTime() / 1000),
+                created_at: deferred_time,  // Pretend that the Nostr event was created at this time we'll send it later
                 kind: 4,
                 content: encrypted,
                 tags: [['p',pubkey]],
             };
             const signedEvent = await window.nostr.signEvent(event);
-            // log("makeDMto: " + JSON.stringify(signedEvent, null, 2));
+            // log("postDMto: " + JSON.stringify(signedEvent, null, 2));
             log("echo '" + JSON.stringify(signedEvent) + "' | nak event wss://relay.primal.net");
 
             const eventTask = {
-                action: "post",
+                action: action,
+                type: 2,    // EventType.NOSTR_DM
                 relay: "wss://relay.primal.net",
                 msg: msg,
+                trigger: deferred_time,
                 event: signedEvent
             }
             stashed = eventTask;
@@ -892,7 +1083,7 @@
             var ev = {};
             // ev = await makeEVto("Cool test message");
             const sm = "Soooo secret " + Math.floor(Math.random() * 100);
-            ev = await makeDMto(sm, hpk); // to Receiver
+            ev = await postDMto(sm, hpk); // to Receiver
 
             const eventTask = {
                 action: "post",

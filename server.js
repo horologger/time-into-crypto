@@ -37,6 +37,7 @@ const TimeSlotState = {
     CONFIRMED: 'confirmed',
     REJECTED: 'rejected',
     CANCELED: 'canceled',
+    T_MINUS_60: 't_minus_60',
     LATE_CREATOR: 'late_creator',
     LATE_RESERVOR: 'late_reservor',
     NOSHOW_CREATOR: 'noshow_creator',
@@ -44,6 +45,10 @@ const TimeSlotState = {
     IN_PROGRESS: 'in_progress',
     PAUSED_CREATOR: 'paused_creator',
     PAUSED_RESERVOR: 'paused_reservor',
+    STOPPED_CREATOR: 'stopped_creator',
+    STOPPED_RESERVOR: 'stopped_reservor',
+    TERMINATED_CREATOR: 'terminated_creator',
+    TERMINATED_RESERVOR: 'terminated_reservor',
     GOING_LONG: 'going_long',
     COMPLETE: 'complete',
     EXPIRED: 'expired',
@@ -64,29 +69,39 @@ const timeslot = {
     "state": TimeSlotState.CREATED
 };
   
-// Enum structure for slot states
+// Enum structure for event states
 const EventState = {
     ACTIVE: 'active',
     TRIGGERED: 'triggered',
     PROCESSED: 'processed'
+};
+
+// Enum structure for event states
+const EventType = {
+    UNKNOWN: 'unknown',
+    INFO: 'info',
+    NOSTR_DM: 'nostr_dm',
+    INVOICE: 'invoice'
 };
   
 
 // Initial time slot data
 const event = {
     "id": "unknown",
+    "type": EventType.UNKNOWN,
     "label": "unknown",
     "creator": "unknown",
     "reservor": "unknown",
     "trigger": Date.now() + d60mins,
+    "dest": "unknown", // "wss://relay.example.com
     "data": "{}",
-    "state": TimeSlotState.ACTIVE
+    "state": EventState.ACTIVE
 };
   
 
 // Creating timeslots table in the SQLite database
 db.exec("CREATE TABLE timeslots (id TEXT, label TEXT, created INTEGER, creator TEXT, reservor TEXT, start INTEGER, duration INTEGER, satsmin INTEGER, quote REAL, currency TEXT, state INTEGER)");
-db.exec("CREATE TABLE events (id TEXT, label TEXT, created INTEGER, creator TEXT, reservor TEXT, trigger INTEGER, data TEXT, state INTEGER)");
+db.exec("CREATE TABLE events (id TEXT, type INTEGER, label TEXT, created INTEGER, creator TEXT, reservor TEXT, trigger INTEGER, dest TEXT, data TEXT, state INTEGER)");
 
 
 const {authenticatedLndGrpc} = require('ln-service');
@@ -357,14 +372,14 @@ const wsServer = new ws.Server({ noServer: true });
 
 var client_cnt = 0;
 gsocket = {};   // Table of websocket connections
-gtimeslots = {};   // Table of timeslots for each tenant
+// gtimeslots = {};   // Table of timeslots for each tenant
 
-function addTimeSlot(payee,slot) {
-    if (typeof gtimeslots[payee] == "undefined") {
-        gtimeslots[payee] = [];
-    }
-    gtimeslots[payee].push(slot);
-}   
+// function addTimeSlot(payee,slot) {
+//     if (typeof gtimeslots[payee] == "undefined") {
+//         gtimeslots[payee] = [];
+//     }
+//     gtimeslots[payee].push(slot);
+// }   
 
 
 wsServer.on('connection', (socket, req) => {
@@ -406,10 +421,24 @@ wsServer.on('connection', (socket, req) => {
     var deviceStatus = deviceStatus || null;
     // ----
  
-    (async () => {
-        const retval = (await getPrice("bitcoin", "usd"));
+    // (async () => {
+    //     const retval = (await getPrice("bitcoin", "usd"));
+    //     if ((typeof retval.data == "object") && (typeof retval.data.bitcoin == "object") && (typeof retval.data.bitcoin.usd == "number")) {
+    //     // if (typeof retval.data.bitcoin.usd == "number") {
+    //         bitcoinPrice = retval.data.bitcoin.usd;
+    //         console.log(bitcoinPrice);
+    //         const info_event = {
+    //             type: "price",
+    //             ticker: "bitcoin",
+    //             currency: "usd",
+    //             price: bitcoinPrice
+    //         };
+    //         broadcast(JSON.stringify(info_event));
+    //     }
+    // })();   
+    
+    getPrice("bitcoin", "usd").then((retval) => {
         if ((typeof retval.data == "object") && (typeof retval.data.bitcoin == "object") && (typeof retval.data.bitcoin.usd == "number")) {
-        // if (typeof retval.data.bitcoin.usd == "number") {
             bitcoinPrice = retval.data.bitcoin.usd;
             console.log(bitcoinPrice);
             const info_event = {
@@ -420,8 +449,10 @@ wsServer.on('connection', (socket, req) => {
             };
             broadcast(JSON.stringify(info_event));
         }
-    })();   
-    
+    }).catch((err) => {
+        console.log('Get Bitcoin Price Error: ' + err);
+    });
+           
 
     socket.on('message', async message => {
         // console.log('Received:' + message);
@@ -431,42 +462,46 @@ wsServer.on('connection', (socket, req) => {
         
         if (msg.action == "info") {
             console.log('Info: ' + msg.hpk);
-            if (msg.hpk != 'unknown') {
-                console.log('Use ' + msg.relay + ' to get info on ' + msg.hpk);
-                const irelay = new nt.Relay(msg.relay);
-                await irelay.connect();
-                console.log(`connected to irelay ${irelay.url}`)
+            // Not always working, so commented out
+            // if (msg.hpk != 'unknown') {
+            //     console.log('Use ' + msg.relay + ' to get info on ' + msg.hpk);
+            //     const irelay = new nt.Relay(msg.relay);
+            //     irelay.connect().then(() => {
+            //         console.log(`connected to irelay ${irelay.url}`)
 
-                // let's query for an event that exists
-                const sub = irelay.subscribe([
-                    {
-                    kinds: [0],
-                    authors: [msg.hpk]
-                    },
-                ], {
-                    onevent(event) {
-                    // console.log('Found them:', JSON.stringify(event,null,2));
-                    console.log('content: ' + event.content);
-                    const content = JSON.parse(event.content);
-                    console.log('name: ' + content.name);
-                    console.log('display: ' + content.display_name);
-                    console.log('picture: ' + content.picture);
-                    const info_event = {
-                        type: "info",
-                        info: content.display_name
-                    };
-                    broadcast(JSON.stringify(info_event));
-                },
-                    oneose() {
-                        console.log('sub has closed');
-                        sub.close()
+            //         // let's query for an event that exists
+            //         const sub = irelay.subscribe([
+            //             {
+            //             kinds: [0],
+            //             authors: [msg.hpk]
+            //             },
+            //         ], {
+            //             onevent(event) {
+            //             // console.log('Found them:', JSON.stringify(event,null,2));
+            //             console.log('content: ' + event.content);
+            //             const content = JSON.parse(event.content);
+            //             console.log('name: ' + content.name);
+            //             console.log('display: ' + content.display_name);
+            //             console.log('picture: ' + content.picture);
+            //             const info_event = {
+            //                 type: "info",
+            //                 info: content.display_name
+            //             };
+            //             broadcast(JSON.stringify(info_event));
+            //         },
+            //             oneose() {
+            //                 console.log('sub has closed');
+            //                 sub.close()
 
-                        irelay.close();
-                        console.log(`irelay ${irelay.url} has closed`);   
+            //                 irelay.close();
+            //                 console.log(`irelay ${irelay.url} has closed`);   
 
-                    }
-                })
-            }
+            //             }
+            //         })
+            //     }).catch((err) => {
+            //         console.log(`irelay ${irelay.url} failed to connect`);
+            //     });
+            // }
         } else if (msg.action == "post") {
             console.log('Post: ' + "to " + msg.relay);
             console.log('msg: ' + "to " + msg.msg);
@@ -479,18 +514,44 @@ wsServer.on('connection', (socket, req) => {
 
             // console.log("dm event: " + dme);
             // post_relay.send(msg.event);
+
+            // const relay = new nt.Relay(msg.relay);
+            // await relay.connect();
+            // console.log(`connected to ${relay.url}`)
+            // await relay.publish(msg.event);
+            // relay.close();
+
+            // console.log(`relay ${relay.url} has closed`);   
             const relay = new nt.Relay(msg.relay);
-            await relay.connect();
-            console.log(`connected to ${relay.url}`)
-            await relay.publish(msg.event);
-            relay.close();
-            console.log(`relay ${relay.url} has closed`);   
+            relay.connect().then(() => {    
+                console.log(`connected to ${relay.url}`)
+                relay.publish(msg.event).then(() => {
+                    relay.close();
+                    console.log(`relay ${relay.url} has closed`);   
+                }).catch((err) => { 
+                    console.log(`relay ${relay.url} failed to publish`);
+                });
+            }).catch((err) => {
+                console.log(`relay ${relay.url} failed to connect`);
+            });
 
         } else if (msg.action == "defer") {
             console.log('Defer: ' + "to " + msg.relay);
-            console.log('msg: ' + "to " + msg.msg);
+            console.log('msg: ' + "is " + msg.msg);
+            console.log('trigger: ' + "at " + msg.trigger);
 
-            console.log(JSON.stringify(msg,null,2));
+            const now =  Math.floor(Date.now()/1000)
+            const trg = parseInt(msg.trigger);
+            console.log('now: ' + now);
+            console.log('trg: ' + trg); 
+
+            // console.log(JSON.stringify(msg,null,2));
+            if (trg >= now) {
+                console.log("adding Event for later...");
+                const ev = eventMgr.addEvent({  "type": EventType.NOSTR_DM, "label": "deferred", "creator": "unknown", "trigger": msg.trigger, "dest": msg.relay, "data": JSON.stringify(msg.event) });
+            } else {
+                console.log('trigger is in the past');
+            }
 
             // const relay = new nt.Relay(msg.relay);
             // await relay.connect();
@@ -501,7 +562,7 @@ wsServer.on('connection', (socket, req) => {
 
         } else if (msg.action == "addTimeSlot") {
             console.log('addTimeSlot for ' + msg.hpk + " " + msg.start + " " + msg.duration + " " + msg.satsmin + " " + msg.quote);
-            const addedID = timeSlotMgr.addTimeSlot({  "label": "add", "creator": msg.hpk, "start": msg.start, "duration":  msg.duration, "satsmin": msg.satsmin, "quote": msg.quote, "currency": "usd"});
+            const addedID = timeSlotMgr.addTimeSlot({  "label": "add", "creator": msg.hpk, "reservor": "unknown", "start": msg.start, "duration":  (msg.duration * 60), "satsmin": msg.satsmin, "quote": msg.quote, "currency": "usd", "state": "created"});
             console.log('addedID: ' + addedID);
         } else if (msg.action == "delTimeSlot") {
             console.log('delTimeSlot for ' + msg.hpk + " " + msg.slotID);
@@ -528,8 +589,15 @@ wsServer.on('connection', (socket, req) => {
         //     console.log('Unhandled Action' + msg.action);
         // } else if (msg.action == "reserveTimeSlot") {
         //     console.log('Unhandled Action' + msg.action);
-        } else if (msg.action == "other") {
-            console.log('Unhandled Action' + msg.action);
+        } else if (msg.action == "pause") {
+            console.log('doPause Action ' + msg.action + " on " + msg.slotID + " by " + msg.pauser);
+            notify_listeners(msg.hpk, JSON.stringify({ type: "paused", pauser: msg.pauser, slotID: msg.slotID}));
+        } else if (msg.action == "resume") {
+            console.log('doResume Action' + msg.action + " on " + msg.slotID + " by " + msg.pauser);
+            notify_listeners(msg.hpk, JSON.stringify({ type: "resumed", resumer: msg.resumer, slotID: msg.slotID}));
+        } else if (msg.action == "end") {
+            console.log('doEnd Action ' + msg.action + " on " + msg.slotID + " by " + msg.pauser);
+            notify_listeners(msg.hpk, JSON.stringify({ type: "ended", ender: msg.ender, slotID: msg.slotID}));
         } else {
             console.log('Unknown Action' + msg.action);
         }
@@ -739,6 +807,8 @@ global.notify_listeners = function(hpk,data) {
 // 	createDelegationEvent, getPublicKey, signDelegationToken,
 // 	signId, verifyEvent} = require('nostr');
 const {RelayPool} = require('nostr');
+const { session } = require('passport');
+const { time } = require('console');
 
 
 const jb55 = "32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245"
@@ -796,15 +866,28 @@ async function getPrice(ids, vs_currencies) {
 
 
 var bitcoinPrice = 0;
-(async () => {
-    const retval = (await getPrice("bitcoin", "usd"));
+// (async () => {
+//     const retval = (await getPrice("bitcoin", "usd"));
+//     if (typeof retval.data == "object" && typeof retval.data.bitcoin == "object" && typeof retval.data.bitcoin.usd == "number") {
+//         bitcoinPrice = retval.data.bitcoin.usd;
+//     } else {
+//         bitcoinPrice = 100000;
+//     }
+//     console.log(bitcoinPrice);
+// })();   
+
+getPrice("bitcoin", "usd").then((retval) => {
     if (typeof retval.data == "object" && typeof retval.data.bitcoin == "object" && typeof retval.data.bitcoin.usd == "number") {
         bitcoinPrice = retval.data.bitcoin.usd;
     } else {
         bitcoinPrice = 100000;
     }
     console.log(bitcoinPrice);
-})();   
+}).catch((err) => {
+    console.log('Get Bitcoin Price Error: ' + err);
+});
+
+
 
 
 function create_dm_event(msg, pubkey) {
@@ -851,8 +934,8 @@ var TimeSlotManager = (function() {
                 timeslot.id = uuid;
                 timeslot.created = Date.now();
                 console.log("uuid: " + uuid);
-                timeslot.reservor = "unknown";
-                timeslot.state = TimeSlotState.CREATED;
+                // timeslot.reservor = "unknown";
+                // timeslot.state = TimeSlotState.CREATED;
                 
                 // Insert timeslot into the SQLite database using transactions for better-sqlite3
                 const stmt = db.prepare("INSERT INTO timeslots VALUES (@id, @label, @created, @creator, @reservor, @start, @duration, @satsmin, @quote, @currency, @state)");
@@ -887,7 +970,7 @@ var TimeSlotManager = (function() {
                 const stmt = db.prepare(`SELECT * FROM timeslots ORDER BY ${key} ${order}`);
                 const rows = stmt.all();
                 rows.forEach(row => {
-                    console.log(`uuid: ${row.id} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} start: ${row.start} duration: ${row.duration} satsmin: ${row.satsmin}`);
+                    console.log(`uuid: ${row.id} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} start: ${row.start} duration: ${row.duration} satsmin: ${row.satsmin} state: ${row.state}`);
                 });
             },
             getAllTimeSlots: function(key, ascend = true) {
@@ -896,6 +979,34 @@ var TimeSlotManager = (function() {
                 const rows = stmt.all();
                 return rows;    
             },
+            updateExpiredTimeSlots: function(timeNow, graceSecs = 0) {
+                const stmt = db.prepare(`SELECT * FROM timeslots`);
+                const rows = stmt.all();
+                numExpired = 0;
+                rows.forEach(row => {
+                    console.log(`uuid: ${row.id} label: ${row.label} start: ${row.start} duration: ${row.duration} state: ${row.state}`);
+                    let endTime = row.start + row.duration + graceSecs;
+                    if (timeNow > endTime) {
+                        console.log("Expired: " + row.id);
+                        const stmt = db.prepare("UPDATE timeslots SET state = ? WHERE id = ?");
+                        const result = stmt.run(TimeSlotState.EXPIRED, row.id);
+                        numExpired++;
+                    }
+                });
+                return numExpired;    
+            },
+            getAllTimeSlots4Period: function(key, ascend = true, startTime, endTime, state = "confirmed") {
+                let order = ascend ? 'ASC' : 'DESC';
+                 const stmt = db.prepare(`SELECT * FROM timeslots WHERE ? <= start AND start < ? AND state = '${state}' ORDER BY ${key} ${order}`);
+                 const rows = stmt.all(startTime,endTime);
+                 // rows.forEach(row => {
+                 //     console.log(`uuid: ${row.id} label: ${row.label} start: ${row.start} state: ${row.state}`);
+                 //     console.log("startTime:  " + startTime);
+                 //     console.log("slot.start: " + row.start);
+                 //     console.log("endTime:    " + endTime);
+                 //      });
+                 return rows;    
+             },
             getCreatorTimeSlots: function(creator, key = "start", ascend = true, state = null) {
                 let order = ascend ? 'ASC' : 'DESC';
                 var querystring = ``;
@@ -923,6 +1034,10 @@ var TimeSlotManager = (function() {
             reserveTimeSlot: function(id, reservor) {
                 const stmt = db.prepare("UPDATE timeslots SET reservor = ?, state = ? WHERE id = ?");
                 const result = stmt.run(reservor, TimeSlotState.RESERVED, id);
+            },
+            setTimeSlotState: function(id, newState) {
+                const stmt = db.prepare("UPDATE timeslots SET state = ? WHERE id = ?");
+                const result = stmt.run(newState, id);
             }
         };
     }
@@ -941,11 +1056,12 @@ var TimeSlotManager = (function() {
 var timeSlotMgr = TimeSlotManager.getInstance();
 
 // Add initial time slots
-const first = timeSlotMgr.addTimeSlot({  "label": "1st", "creator": vacuum8, "start": Date.now() + (5 * 60 * 1000), "duration": 30, "satsmin": 1100, "quote": 11.234, "currency": "usd"});
-const second = timeSlotMgr.addTimeSlot({ "label": "2nd", "creator": horologger, "start": Date.now() + (8 * 60 * 1000), "duration": 10, "satsmin": 1200, "quote": 12.234, "currency": "usd"});
-const third = timeSlotMgr.addTimeSlot({  "label": "3rd", "creator": horologger, "start": Date.now() + (19 * 60 * 1000), "duration": 20, "satsmin": 1300, "quote": 13.234, "currency": "usd"});
-const fourth = timeSlotMgr.addTimeSlot({ "label": "4th", "creator": horologger, "start": Date.now() + (40 * 60 * 1000), "duration": 30, "satsmin": 1400, "quote": 14.234, "currency": "usd"});
-const fifth = timeSlotMgr.addTimeSlot({  "label": "5th", "creator": vacuum8, "start": Date.now() + (35 * 60 * 1000), "duration": 30, "satsmin": 1500, "quote": 15.234, "currency": "usd"});
+// const justNow = Math.floor((Date.now()/10000)*10);
+// const first = timeSlotMgr.addTimeSlot({  "label": "1st", "creator": vacuum8, "reservor": "unknown", "start": justNow + (5 * 60), "duration": 30, "satsmin": 1100, "quote": 11.234, "currency": "usd"});
+// const second = timeSlotMgr.addTimeSlot({ "label": "2nd", "creator": horologger, "reservor": vacuum8, "start": (justNow + (60)), "duration": 125, "satsmin": 1200, "quote": 12.234, "currency": "usd", "state": 'confirmed'});
+// const third = timeSlotMgr.addTimeSlot({  "label": "3rd", "creator": horologger, "reservor": "unknown", "start": justNow + (19 * 60), "duration": 20, "satsmin": 1300, "quote": 13.234, "currency": "usd"});
+// const fourth = timeSlotMgr.addTimeSlot({ "label": "4th", "creator": horologger, "reservor": "unknown", "start": justNow + (40 * 60), "duration": 30, "satsmin": 1400, "quote": 14.234, "currency": "usd"});
+// const fifth = timeSlotMgr.addTimeSlot({  "label": "5th", "creator": vacuum8, "reservor": "unknown", "start": justNow + (35 * 60), "duration": 30, "satsmin": 1500, "quote": 15.234, "currency": "usd"});
 
 // =============================================================================    
 
@@ -961,13 +1077,14 @@ var EventManager = (function() {
                 // Generate unique ID and set creation timestamp
                 var uuid = uid.sync(8);
                 event.id = uuid;
+                // event.type = EventType.INFO; // Should already be set
                 event.created = Date.now();
                 console.log("uuid: " + uuid);
                 event.reservor = "unknown";
                 event.state = EventState.ACTIVE;
                 
                 // Insert event into the SQLite database using transactions for better-sqlite3
-                const stmt = db.prepare("INSERT INTO events VALUES (@id, @label, @created, @creator, @reservor, @trigger, @data, @state)");
+                const stmt = db.prepare("INSERT INTO events VALUES (@id, @type, @label, @created, @creator, @reservor, @trigger, @dest, @data, @state)");
                 const result = stmt.run(event);
                 
                 return uuid;
@@ -985,7 +1102,7 @@ var EventManager = (function() {
                 const stmt = db.prepare(`SELECT * FROM events ORDER BY ${key} ${order}`);
                 const rows = stmt.all();
                 rows.forEach(row => {
-                    console.log(`uuid: ${row.id} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} trigger: ${row.trigger}`);
+                    console.log(`uuid: ${row.id} type: ${row.type} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} trigger: ${row.trigger} state: ${row.state}`);
                 });
             },
             getFutureEvents: function(key, ascend = true, timeNow) {
@@ -1027,20 +1144,107 @@ var EventManager = (function() {
 var eventMgr = EventManager.getInstance();
 
 // Add initial events
-const ev1 = eventMgr.addEvent({  "label": "4later", "creator": "unknown", "trigger": Math.floor(Date.now()/1000) + (1 * 15), "data": JSON.stringify({action: "info", hpk: "unknown", relay: "ws://localhost:8080"})});
+const ev1 = eventMgr.addEvent({  "label": "4later", "type": EventType.INFO, "creator": "unknown", "trigger": Math.floor(Date.now()/1000) + (1 * 15), dest: "ws://localhost:8080", "data": JSON.stringify({action: "info", hpk: "unknown"})});
 
-const ev2 = eventMgr.addEvent({  "label": "in30s", "creator": "unknown", "trigger": Math.floor(Date.now()/1000) + (1 * 30), "data": JSON.stringify({action: "info", hpk: "unknown", relay: "ws://localhost:8080"})});
+// const ev2 = eventMgr.addEvent({  "label": "in30s", "type": EventType.INFO, "creator": "unknown", "trigger": Math.floor(Date.now()/1000) + (1 * 30), dest: "ws://localhost:8080", "data": JSON.stringify({action: "info", hpk: "unknown"})});
 
-function processOutbox(timeNow) {
+async function processOutbox(timeNow) {
     // Get all events in the future
     const futureEvents = eventMgr.getActiveEvents("trigger", true);
-    futureEvents.forEach(event => {
+    futureEvents.forEach(async event => {
         // console.log("future event: " + JSON.stringify(event));
-        console.log(event.trigger + " <= " + timeNow);
+        console.log(event.trigger + " <= " + timeNow + " " + Math.floor((event.trigger - timeNow)/60) + " minutes or " + (event.trigger - timeNow) + " seconds away...");
         if (event.trigger <= timeNow) {
             // Process the event
-            console.log("Triggering event: " + event.id + " " + event.label);
+            console.log("Triggering event: " + event.id + " " + event.label + " " + event.type + " " + event.trigger + " " + event.dest);
+            console.log("Triggered Data: " + JSON.stringify((JSON.parse(event.data)),null,2));
+
+            if (event.type == 'nostr_dm') {
+                const relay = new nt.Relay(event.dest);
+                // await relay.connect();
+                // console.log(`connected to ${relay.url}`)
+                // await relay.publish(JSON.parse(event.data));
+                // relay.close();
+                relay.connect().then(() => {
+                    relay.publish(JSON.parse(event.data)).then(() => {
+                        relay.close();
+                        console.log(`relay ${relay.url} has closed`);   
+                    }).catch((err) => {
+                        console.log(`relay ${relay.url} failed to publish`);
+                    });
+                }).catch((err) => {
+                    console.log(`relay ${relay.url} failed to connect`);
+                });
+            } else {
+                console.log("Unhandled Event Type: " + event.type);
+            }
+
+
             eventMgr.setEventState(event.id, EventState.TRIGGERED);
+        }
+    });
+
+}
+
+function manageSessions(timeNow) {
+    console.log("manageSessions...");
+    const numExpired = timeSlotMgr.updateExpiredTimeSlots(timeNow, 60);
+    if (numExpired > 0) { 
+        console.log(numExpired + " expired time slots...");
+    }
+    timeSlotMgr.dumpTimeSlots("start", true);
+    var slots = timeSlotMgr.getAllTimeSlots4Period("start", true, timeNow, timeNow + (5 * 60), "confirmed");
+    slots.forEach(async slot => {
+        const insecs = slot.start - timeNow;
+        console.log("upcoming: " + slot.id + ": " + slot.start + " >= " + timeNow + " " + insecs + " seconds away...");
+        notify_listeners(slot.creator, JSON.stringify({ type: "pending-session", insecs: insecs }));
+        if (insecs <= 5) {
+            timeSlotMgr.setTimeSlotState(slot.id, "in_progress");
+        }
+    });
+
+// const timeNow = Math.round(new Date().getTime() / 1000);
+// const slot_start = timeNow - 10;   // 100 secs since start
+// const slot_duration = 90;
+// const invoicePeriod = (1 * 40); // in seconds
+
+// const endsecs = slot_start + slot_duration; // duration is in seconds
+// const forsecs = timeNow - slot_start;
+// const secsremaining = endsecs - timeNow;
+// const durationPerc = Math.round(forsecs/((slot_duration / 100)));
+// const invoicePerc = Math.round(forsecs/((invoicePeriod / 100)));
+// const invoiceNow = (Math.round(forsecs/((invoicePeriod / 100)))%100 == 0);
+
+// console.log("timeNow   : " + timeNow);
+// console.log("slot_start: " + slot_start); console.log("slot_duration: " + slot_duration);
+// console.log("forsecs: " + forsecs); console.log("secsremaining: " + secsremaining);
+
+    const invoicePeriod = (1 * 40); // in seconds
+    var slots = timeSlotMgr.getAllTimeSlots4Period("start", true, timeNow - (60 * 60), timeNow + (1 * 60), "in_progress");
+    slots.forEach(async slot => {
+        const endsecs = slot.start + slot.duration; // duration is in seconds
+        const forsecs = timeNow - slot.start;
+        const secsremaining = endsecs - timeNow;
+        var durationPercent = (Math.round(forsecs/((slot.duration / 100))));
+        if (durationPercent == 0) { durationPercent = 100; }
+        var invoicePercent = (Math.round((forsecs%invoicePeriod)/((invoicePeriod / 100))));
+        if (invoicePercent == 0) { invoicePercent = 100; }
+        const invoiceNow = (Math.round(forsecs/((invoicePeriod / 100)))%100 == 0);
+        const invoiceSoon = (invoicePercent >= 85);
+
+        console.log("forsecs: " + forsecs);
+        console.log("durationPercent: " + durationPercent);
+        console.log("invoicePercent: " + invoicePercent);
+        console.log("invoiceNow: " + invoiceNow);
+        console.log("invoiceSoon: " + invoiceSoon);
+
+
+
+        console.log("in_progress: " + slot.id + ": " + slot.start + " <= " + timeNow + " " + forsecs + " seconds since start... " + secsremaining + " seconds remaining...");
+        notify_listeners(slot.creator, JSON.stringify({ type: "in-progress", forsecs: forsecs, invsoon: invoiceSoon, invnow: invoiceNow, secsremaining: secsremaining, durperc: durationPercent, invperc: invoicePercent}));
+        if (secsremaining <= 0) {
+            timeSlotMgr.setTimeSlotState(slot.id, "completed");
+            notify_listeners(slot.creator, JSON.stringify({ type: "completed", slots: slots }));
         }
     });
 
@@ -1054,17 +1258,42 @@ function randomNumber(min, max) {
 }
 
 // --- Uncomment for /socket/chat
-let myVar = setInterval(myTimer, (10 * 1000));
+var myVar = setInterval(syncTimer, (1 * 1000));
+
+const timerInterval = 10; // in seconds
+function syncTimer() {
+    const now = Math.round(new Date().getTime() / 1000);
+    if (now % 10 == 0) {
+        console.log("sync " + now);
+        clearInterval(myVar);
+        timeSlotMgr.addTimeSlot({ "label": "syncd", "creator": horologger, "reservor": vacuum8, "start": (now + (20)), "duration": (90), "satsmin": 1200, "quote": 12.234, "currency": "usd", "state": 'confirmed'});
+        myVar = setInterval(myTimer, (timerInterval * 1000));
+    } else {
+        console.log("sync in " + (10-(now%10)));
+    }
+}
 
 function myTimer() {
-    const now = Math.round((new Date()).getTime() / 1000);
+    const now = Math.round(new Date().getTime() / 1000);
+
+    console.log(now);
+
+    console.log("now " + now);
     const time_event = {
         type: "time",
         time: now,
     };
     broadcast(JSON.stringify(time_event));
 
-    processOutbox(now);
+    processOutbox(now).then(() => {
+        // Handle any post-processing logic here
+        console.log("Outbox processed...");
+        manageSessions(now);
+        console.log("Sessions processed...");
+    }).catch((error) => {
+        console.error("Error processing outbox:", error);
+    });
+
 }
 
 server.on('upgrade', (request, socket, head) => {
