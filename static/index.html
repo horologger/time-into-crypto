@@ -151,6 +151,18 @@
         }
     };
 
+    async function makeInvoice(amount, memo = "TimeIntoCrypto") {
+        try {
+            const invoice = await window.webln.makeInvoice( { amount: amount , defaultMemo: memo} );
+        }
+        catch(err) {
+            // Tell the user what went wrong
+            log(err.message);
+            alert(err.message);
+        }
+        return(invoice);
+    };
+
     var nostrPubKey = "unknown";
 
     var loc_href = "http://localhost:8080/?hpk=7bde...72a5&relay=wss://domas.io";   // urlencoded??
@@ -273,7 +285,7 @@
             if (ts_hour < 10) { ts_hour = "0" + ts_hour; }
             var ts_minute = sDate.getMinutes();
             if (ts_minute < 10) { ts_minute = "0" + ts_minute; }
-            var sDuration = parseInt(slot.duration);
+            var sDuration = Math.round(parseInt(slot.duration) / 60);
 
             const confDateTime = ts_year + "-" + ts_month + "-" + ts_day + " " + ts_hour + ":" + ts_minute;
 
@@ -335,11 +347,26 @@
                 } else {
                     newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0f0d0' >Confirmed Reservation</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
                 }
+                inProcessSlotID = slot.id;
             } else if (slot.state == "in_progress") {
                 if (hpk != nostrPubKey) {
                     newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; color: black; background-color: #d0d0d0' disabled>In Progress</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8);  // Maybe a countdown timer to the start of the slot
                 } else {
                     newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0d0d0' >In Progress</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
+                }
+                inProcessSlotID = slot.id;
+            } else if (slot.state == "paused_reservor") {
+                if (hpk != nostrPubKey) {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; color: black; background-color: #d0d0d0' disabled>Reservor Paused</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8);  // Maybe a countdown timer to the start of the slot
+                } else {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0d0d0' >Reservor Paused</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
+                }
+                inProcessSlotID = slot.id;
+            } else if (slot.state == "paused_creator") {
+                if (hpk != nostrPubKey) {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; color: black; background-color: #d0d0d0' disabled>Creator Paused</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8);  // Maybe a countdown timer to the start of the slot
+                } else {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0d0d0' >Creator Paused</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
                 }
                 inProcessSlotID = slot.id;
             } else if (slot.state == "completed") {
@@ -532,7 +559,7 @@
                         document.getElementById("invoice").innerHTML = "Awaiting Next Invoice...";
                     }
 
-                    // getTimeSlots(hpk);
+                    getTimeSlots(hpk);
                 } else if (json.type == "completed"){
                     log("completed: ");
                     document.getElementById("session-message").innerHTML = "Session had ended";
@@ -545,12 +572,32 @@
                 } else if (json.type == "paused"){
                     // yoda: "Paused, the session is."
                     sessionPaused();
+                    getTimeSlots(hpk);
                 } else if (json.type == "resumed"){
                     // yoda: "Resumed, the session is."
                     sessionResumed();
+                    getTimeSlots(hpk);
                 } else if (json.type == "ended"){
                     // yoda: "Ended, the session is."
+                    document.getElementById("session-message").innerHTML = "Session had ended";
+                    document.getElementById("session-controls").style.display = "none";
+                    document.getElementById("session-progress").style.width = json.durperc + "%";
+                    document.getElementById("session-progress").style.backgroundColor = "#e6e6e6";   // gray
+                    document.getElementById("invoice-countdown").style.backgroundColor = "#e6e6e6";   // gray
+                    getTimeSlots(hpk);
                     sessionEnded();
+                } else if (json.type == "create-invoice"){
+                    document.getElementById("invoice").innerHTML = JSON.stringify(json);
+                    makeInvoice(json.amtInSats).then((invoice) => {
+                        log("Invoice Sent!");
+                        connection.send(JSON.stringify({action: "receive-invoice", creator: json.creator, reservor: json.reservor, invoice: invoice }));
+                    }).catch((error) => {
+                        log("Invoice Error: " + error);
+                    });
+                    // connection.send(JSON.stringify({action: "receive-invoice", creator: json.creator, reservor: json.reservor, invoice: { amount: json.amtInSats } }));
+                } else if (json.type == "pay-invoice"){
+                    document.getElementById("invoice").innerHTML = JSON.stringify(json);
+                    connection.send(JSON.stringify({action: "pay-receipt", creator: json.creator, reservor: json.reservor, receipt: "some receipt" }));
                 } else {
                     log(event.data);
                 }

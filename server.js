@@ -62,6 +62,7 @@ const timeslot = {
     "creator": "unknown",
     "reservor": "unknown",
     "start": Date.now() + d60mins,
+    "pause": 0,
     "duration": d30mins,
     "satsmin": 10000,
     "quote": 1.234,
@@ -100,7 +101,7 @@ const event = {
   
 
 // Creating timeslots table in the SQLite database
-db.exec("CREATE TABLE timeslots (id TEXT, label TEXT, created INTEGER, creator TEXT, reservor TEXT, start INTEGER, duration INTEGER, satsmin INTEGER, quote REAL, currency TEXT, state INTEGER)");
+db.exec("CREATE TABLE timeslots (id TEXT, label TEXT, created INTEGER, creator TEXT, reservor TEXT, start INTEGER, pause INTEGER, duration INTEGER, satsmin INTEGER, quote REAL, currency TEXT, state INTEGER)");
 db.exec("CREATE TABLE events (id TEXT, type INTEGER, label TEXT, created INTEGER, creator TEXT, reservor TEXT, trigger INTEGER, dest TEXT, data TEXT, state INTEGER)");
 
 
@@ -562,7 +563,7 @@ wsServer.on('connection', (socket, req) => {
 
         } else if (msg.action == "addTimeSlot") {
             console.log('addTimeSlot for ' + msg.hpk + " " + msg.start + " " + msg.duration + " " + msg.satsmin + " " + msg.quote);
-            const addedID = timeSlotMgr.addTimeSlot({  "label": "add", "creator": msg.hpk, "reservor": "unknown", "start": msg.start, "duration":  (msg.duration * 60), "satsmin": msg.satsmin, "quote": msg.quote, "currency": "usd", "state": "created"});
+            const addedID = timeSlotMgr.addTimeSlot({  "label": "add", "creator": msg.hpk, "reservor": "unknown", "start": msg.start, "pause": 0, "duration":  (msg.duration * 60), "satsmin": msg.satsmin, "quote": msg.quote, "currency": "usd", "state": "created"});
             console.log('addedID: ' + addedID);
         } else if (msg.action == "delTimeSlot") {
             console.log('delTimeSlot for ' + msg.hpk + " " + msg.slotID);
@@ -592,12 +593,24 @@ wsServer.on('connection', (socket, req) => {
         } else if (msg.action == "pause") {
             console.log('doPause Action ' + msg.action + " on " + msg.slotID + " by " + msg.pauser);
             notify_listeners(msg.hpk, JSON.stringify({ type: "paused", pauser: msg.pauser, slotID: msg.slotID}));
+            if (msg.hpk == msg.pauser) {
+                timeSlotMgr.setTimeSlotState(msg.slotID, "paused_creator");
+            } else {
+                timeSlotMgr.setTimeSlotState(msg.slotID, "paused_reservor");
+            }
         } else if (msg.action == "resume") {
             console.log('doResume Action' + msg.action + " on " + msg.slotID + " by " + msg.pauser);
             notify_listeners(msg.hpk, JSON.stringify({ type: "resumed", resumer: msg.resumer, slotID: msg.slotID}));
+            timeSlotMgr.setTimeSlotState(msg.slotID, "in_progress");
         } else if (msg.action == "end") {
             console.log('doEnd Action ' + msg.action + " on " + msg.slotID + " by " + msg.pauser);
             notify_listeners(msg.hpk, JSON.stringify({ type: "ended", ender: msg.ender, slotID: msg.slotID}));
+            timeSlotMgr.setTimeSlotState(msg.slotID, "completed");
+        } else if (msg.action == "receive-invoice") {
+            console.log('receive invoice: ' + JSON.stringify(msg,null,2));
+            notify_reservor(msg.reservor, JSON.stringify({ type: "pay-invoice", creator: msg.creator, reservor: msg.reservor, invoice: msg.invoice }));
+        } else if (msg.action == "pay-receipt") {
+            console.log('pay-receipt: ' + JSON.stringify(msg,null,2));
         } else {
             console.log('Unknown Action' + msg.action);
         }
@@ -798,6 +811,44 @@ global.notify_listeners = function(hpk,data) {
     console.log('notified...'+(nidx-1)+'..of..'+idx);
 }
 
+global.notify_creator = function(hpk,data) {
+    console.log('notify_creator...');
+
+    var idx = 1;
+    var nidx = 1;
+    var sent = false;
+    
+    wsServer.clients.forEach(client => {
+        if (((client.payee == hpk) && (client.payor == hpk))  && (client.readyState === ws.OPEN) && !sent) {
+            console.log("client: " + idx + " ee:" + client.payee + " or:" + client.payor);
+            client.send(data);
+            nidx++;
+            sent = true;
+        }
+        idx++;
+    });
+    console.log('notified...'+(nidx-1)+'..of..'+idx);
+}
+
+global.notify_reservor = function(hpk,data) {
+    console.log('notify_reservor...');
+
+    var idx = 1;
+    var nidx = 1;
+    var sent = false;
+    
+    wsServer.clients.forEach(client => {
+        if ((client.payor == hpk)  && (client.readyState === ws.OPEN) && !sent) {
+            console.log("client: " + idx + " ee:" + client.payee + " or:" + client.payor);
+            client.send(data);
+            nidx++;
+            sent = true;
+        }
+        idx++;
+    });
+    console.log('notified...'+(nidx-1)+'..of..'+idx);
+}
+
 // =============================================================================    
 
 
@@ -938,7 +989,7 @@ var TimeSlotManager = (function() {
                 // timeslot.state = TimeSlotState.CREATED;
                 
                 // Insert timeslot into the SQLite database using transactions for better-sqlite3
-                const stmt = db.prepare("INSERT INTO timeslots VALUES (@id, @label, @created, @creator, @reservor, @start, @duration, @satsmin, @quote, @currency, @state)");
+                const stmt = db.prepare("INSERT INTO timeslots VALUES (@id, @label, @created, @creator, @reservor, @start, @pause, @duration, @satsmin, @quote, @currency, @state)");
                 const result = stmt.run(timeslot);
                 
                 return uuid;
@@ -970,7 +1021,7 @@ var TimeSlotManager = (function() {
                 const stmt = db.prepare(`SELECT * FROM timeslots ORDER BY ${key} ${order}`);
                 const rows = stmt.all();
                 rows.forEach(row => {
-                    console.log(`uuid: ${row.id} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} start: ${row.start} duration: ${row.duration} satsmin: ${row.satsmin} state: ${row.state}`);
+                    console.log(`uuid: ${row.id} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} start: ${row.start} pause: ${row.pause} duration: ${row.duration} satsmin: ${row.satsmin} state: ${row.state}`);
                 });
             },
             getAllTimeSlots: function(key, ascend = true) {
@@ -984,8 +1035,8 @@ var TimeSlotManager = (function() {
                 const rows = stmt.all();
                 numExpired = 0;
                 rows.forEach(row => {
-                    console.log(`uuid: ${row.id} label: ${row.label} start: ${row.start} duration: ${row.duration} state: ${row.state}`);
-                    let endTime = row.start + row.duration + graceSecs;
+                    console.log(`uuid: ${row.id} label: ${row.label} start: ${row.start} pause: ${row.pause} duration: ${row.duration} state: ${row.state}`);
+                    let endTime = row.start + row.pause + row.duration + graceSecs;
                     if (timeNow > endTime) {
                         console.log("Expired: " + row.id);
                         const stmt = db.prepare("UPDATE timeslots SET state = ? WHERE id = ?");
@@ -999,14 +1050,14 @@ var TimeSlotManager = (function() {
                 let order = ascend ? 'ASC' : 'DESC';
                  const stmt = db.prepare(`SELECT * FROM timeslots WHERE ? <= start AND start < ? AND state = '${state}' ORDER BY ${key} ${order}`);
                  const rows = stmt.all(startTime,endTime);
-                 // rows.forEach(row => {
-                 //     console.log(`uuid: ${row.id} label: ${row.label} start: ${row.start} state: ${row.state}`);
-                 //     console.log("startTime:  " + startTime);
-                 //     console.log("slot.start: " + row.start);
-                 //     console.log("endTime:    " + endTime);
-                 //      });
                  return rows;    
-             },
+            },
+            getInProgressTimeSlots4Period: function(key, ascend = true, startTime, endTime) {
+                let order = ascend ? 'ASC' : 'DESC';
+                 const stmt = db.prepare(`SELECT * FROM timeslots WHERE ? <= start AND start < ? AND (state = 'in_progress' OR state = 'paused_creator' OR state = 'paused_reservor') ORDER BY ${key} ${order}`);
+                 const rows = stmt.all(startTime,endTime);
+                 return rows;    
+            },
             getCreatorTimeSlots: function(creator, key = "start", ascend = true, state = null) {
                 let order = ascend ? 'ASC' : 'DESC';
                 var querystring = ``;
@@ -1038,6 +1089,10 @@ var TimeSlotManager = (function() {
             setTimeSlotState: function(id, newState) {
                 const stmt = db.prepare("UPDATE timeslots SET state = ? WHERE id = ?");
                 const result = stmt.run(newState, id);
+            },
+            setTimeSlotPause: function(id, pauseSecs) {
+                const stmt = db.prepare("UPDATE timeslots SET pause = ? WHERE id = ?");
+                const result = stmt.run(pauseSecs, id);
             }
         };
     }
@@ -1199,7 +1254,10 @@ function manageSessions(timeNow) {
         console.log("upcoming: " + slot.id + ": " + slot.start + " >= " + timeNow + " " + insecs + " seconds away...");
         notify_listeners(slot.creator, JSON.stringify({ type: "pending-session", insecs: insecs }));
         if (insecs <= 5) {
-            timeSlotMgr.setTimeSlotState(slot.id, "in_progress");
+            if (slot.state == "confirmed") {
+                timeSlotMgr.setTimeSlotState(slot.id, "in_progress");
+            }
+            notify_listeners(slot.creator, JSON.stringify({ type: "in_progress", slots: slots }));
         }
     });
 
@@ -1220,12 +1278,19 @@ function manageSessions(timeNow) {
 // console.log("forsecs: " + forsecs); console.log("secsremaining: " + secsremaining);
 
     const invoicePeriod = (1 * 40); // in seconds
-    var slots = timeSlotMgr.getAllTimeSlots4Period("start", true, timeNow - (60 * 60), timeNow + (1 * 60), "in_progress");
+    // var slots = timeSlotMgr.getAllTimeSlots4Period("start", true, timeNow - (60 * 60), timeNow + (1 * 60), "in_progress");
+    var slots = timeSlotMgr.getInProgressTimeSlots4Period("start", true, timeNow - (60 * 60), timeNow + (1 * 60));
+    
     slots.forEach(async slot => {
-        const endsecs = slot.start + slot.duration; // duration is in seconds
-        const forsecs = timeNow - slot.start;
+        if ((slot.state == "paused_creator") || (slot.state == "paused_reservor")) {
+            console.log("slot.pause: " + slot.pause + " + timerInterval: " + timerInterval);
+            var newPause = slot.pause + timerInterval;
+            timeSlotMgr.setTimeSlotPause(slot.id, newPause);
+        }
+        const endsecs = slot.start + slot.pause + slot.duration; // duration is in seconds
+        const forsecs = timeNow - slot.start - slot.pause;
         const secsremaining = endsecs - timeNow;
-        var durationPercent = (Math.round(forsecs/((slot.duration / 100))));
+        var durationPercent = (Math.round(forsecs/(((slot.pause + slot.duration) / 100))));
         if (durationPercent == 0) { durationPercent = 100; }
         var invoicePercent = (Math.round((forsecs%invoicePeriod)/((invoicePeriod / 100))));
         if (invoicePercent == 0) { invoicePercent = 100; }
@@ -1242,6 +1307,10 @@ function manageSessions(timeNow) {
 
         console.log("in_progress: " + slot.id + ": " + slot.start + " <= " + timeNow + " " + forsecs + " seconds since start... " + secsremaining + " seconds remaining...");
         notify_listeners(slot.creator, JSON.stringify({ type: "in-progress", forsecs: forsecs, invsoon: invoiceSoon, invnow: invoiceNow, secsremaining: secsremaining, durperc: durationPercent, invperc: invoicePercent}));
+        if (invoiceNow) {
+            notify_creator(slot.creator, JSON.stringify({ type: "create-invoice", creator: slot.creator, reservor: slot.reservor, amtInSats: 10000 }));
+        }
+
         if (secsremaining <= 0) {
             timeSlotMgr.setTimeSlotState(slot.id, "completed");
             notify_listeners(slot.creator, JSON.stringify({ type: "completed", slots: slots }));
@@ -1266,7 +1335,7 @@ function syncTimer() {
     if (now % 10 == 0) {
         console.log("sync " + now);
         clearInterval(myVar);
-        timeSlotMgr.addTimeSlot({ "label": "syncd", "creator": horologger, "reservor": vacuum8, "start": (now + (20)), "duration": (90), "satsmin": 1200, "quote": 12.234, "currency": "usd", "state": 'confirmed'});
+        timeSlotMgr.addTimeSlot({ "label": "syncd", "creator": horologger, "reservor": vacuum8, "start": (now + (20)), "pause": (0), "duration": (90), "satsmin": 1200, "quote": 12.234, "currency": "usd", "state": 'confirmed'});
         myVar = setInterval(myTimer, (timerInterval * 1000));
     } else {
         console.log("sync in " + (10-(now%10)));
