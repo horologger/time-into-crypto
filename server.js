@@ -103,6 +103,15 @@ const event = {
 // Creating timeslots table in the SQLite database
 db.exec("CREATE TABLE timeslots (id TEXT, label TEXT, created INTEGER, creator TEXT, reservor TEXT, start INTEGER, pause INTEGER, duration INTEGER, satsmin INTEGER, quote REAL, currency TEXT, state INTEGER)");
 db.exec("CREATE TABLE events (id TEXT, type INTEGER, label TEXT, created INTEGER, creator TEXT, reservor TEXT, trigger INTEGER, dest TEXT, data TEXT, state INTEGER)");
+var createstr = '';
+createstr  = 'CREATE TABLE IF NOT EXISTS pending_payments (';
+createstr += 'creator CHAR(36) NOT NULL, ';	// "1234567890123456789012345678901234567890123456789012345678901234"
+createstr += 'invoice CHAR(64) NOT NULL, ';	// "bfa5d543c695f89bfe75ac7fc8076be5ccb8811b3be5dddff9e1d97503425de3"
+createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
+createstr += ')';
+
+db.exec(createstr);
+
 
 
 const {authenticatedLndGrpc} = require('ln-service');
@@ -202,7 +211,7 @@ if (checkFileExists(filename)) {
 
 //const {exit} = require('process');
 
-var attempt_to_connect_to_lnd_on_startup = false;
+var attempt_to_connect_to_lnd_on_startup = true;
 if (attempt_to_connect_to_lnd_on_startup) {
 
     if (cert && macaroon && socket) {
