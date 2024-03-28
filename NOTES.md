@@ -78,7 +78,7 @@ docker run \
 -it horologger/time-into-crypto:v0.0.1 
 
 ```
-Subsequent runs
+Better runs
 ```sh
 docker run \
 -e LND_ADDRESS=ragnar:10009 \
@@ -89,6 +89,7 @@ docker run \
 -v lnd-data:/lnd:ro \
 -v cln-data:/cln:ro \
 -p 8080:8080 \
+--name time-into-crypto \
 -it horologger/time-into-crypto:v0.0.1 
 
 ```

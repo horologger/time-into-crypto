@@ -15,103 +15,31 @@ const nt = require('nostr-tools');
 (0, nt.useWebSocketImplementation)(require('ws'));
 
 
-// Importing necessary modules
-var uid = require('uid-safe');
-const Database = require('better-sqlite3');
 
-// Creating an in-memory SQLite database
-const db = new Database(':memory:');
+// const Database = require('better-sqlite3');
 
-const d10mins = 10 * 60 * 1000;
-const d15mins = 15 * 60 * 1000;
-const d20mins = 20 * 60 * 1000;
-const d30mins = 30 * 60 * 1000;
-const d60mins = 60 * 60 * 1000;
-const d90mins = 90 * 60 * 1000;
+// // Creating an in-memory SQLite database
+// const db = new Database(':memory:'); 
 
-// Enum structure for slot states
-const TimeSlotState = {
-    CREATED: 'created',
-    AVAILABLE: 'available',
-    RESERVED: 'reserved',
-    CONFIRMED: 'confirmed',
-    REJECTED: 'rejected',
-    CANCELED: 'canceled',
-    T_MINUS_60: 't_minus_60',
-    LATE_CREATOR: 'late_creator',
-    LATE_RESERVOR: 'late_reservor',
-    NOSHOW_CREATOR: 'noshow_creator',
-    NOSHOW_RESERVOR: 'noshow_reservor',
-    IN_PROGRESS: 'in_progress',
-    PAUSED_CREATOR: 'paused_creator',
-    PAUSED_RESERVOR: 'paused_reservor',
-    STOPPED_CREATOR: 'stopped_creator',
-    STOPPED_RESERVOR: 'stopped_reservor',
-    TERMINATED_CREATOR: 'terminated_creator',
-    TERMINATED_RESERVOR: 'terminated_reservor',
-    GOING_LONG: 'going_long',
-    COMPLETE: 'complete',
-    EXPIRED: 'expired',
-    REFUNDED: 'refunded'
-};
-  
-// Initial time slot data
-const timeslot = {
-    "id": "unknown",
-    "label": "unknown",
-    "creator": "unknown",
-    "reservor": "unknown",
-    "start": Date.now() + d60mins,
-    "pause": 0,
-    "duration": d30mins,
-    "satsmin": 10000,
-    "quote": 1.234,
-    "currency": "usd",
-    "state": TimeSlotState.CREATED
-};
-  
-// Enum structure for event states
-const EventState = {
-    ACTIVE: 'active',
-    TRIGGERED: 'triggered',
-    PROCESSED: 'processed'
-};
+const tictype = require('./libtypes');
 
-// Enum structure for event states
-const EventType = {
-    UNKNOWN: 'unknown',
-    INFO: 'info',
-    NOSTR_DM: 'nostr_dm',
-    INVOICE: 'invoice'
-};
-  
+const db = require('./library');
 
-// Initial time slot data
-const event = {
-    "id": "unknown",
-    "type": EventType.UNKNOWN,
-    "label": "unknown",
-    "creator": "unknown",
-    "reservor": "unknown",
-    "trigger": Date.now() + d60mins,
-    "dest": "unknown", // "wss://relay.example.com
-    "data": "{}",
-    "state": EventState.ACTIVE
-};
-  
 
-// Creating timeslots table in the SQLite database
-db.exec("CREATE TABLE timeslots (id TEXT, label TEXT, created INTEGER, creator TEXT, reservor TEXT, start INTEGER, pause INTEGER, duration INTEGER, satsmin INTEGER, quote REAL, currency TEXT, state INTEGER)");
-db.exec("CREATE TABLE events (id TEXT, type INTEGER, label TEXT, created INTEGER, creator TEXT, reservor TEXT, trigger INTEGER, dest TEXT, data TEXT, state INTEGER)");
-var createstr = '';
-createstr  = 'CREATE TABLE IF NOT EXISTS pending_payments (';
-createstr += 'creator CHAR(36) NOT NULL, ';	// "1234567890123456789012345678901234567890123456789012345678901234"
-createstr += 'invoice CHAR(64) NOT NULL, ';	// "bfa5d543c695f89bfe75ac7fc8076be5ccb8811b3be5dddff9e1d97503425de3"
-createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
-createstr += ')';
+// // Creating timeslots table in the SQLite database
+// db.exec("CREATE TABLE timeslots (id TEXT, label TEXT, created INTEGER, creator TEXT, reservor TEXT, start INTEGER, pause INTEGER, duration INTEGER, satsmin INTEGER, quote REAL, currency TEXT, state INTEGER)");
+// db.exec("CREATE TABLE events (id TEXT, type INTEGER, label TEXT, created INTEGER, creator TEXT, reservor TEXT, trigger INTEGER, dest TEXT, data TEXT, state INTEGER)");
+// var createstr = '';
+// createstr  = 'CREATE TABLE IF NOT EXISTS pending_payments (';
+// createstr += 'creator CHAR(36) NOT NULL, ';	// "1234567890123456789012345678901234567890123456789012345678901234"
+// createstr += 'invoice CHAR(64) NOT NULL, ';	// "bfa5d543c695f89bfe75ac7fc8076be5ccb8811b3be5dddff9e1d97503425de3"
+// createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
+// createstr += ')';
 
-db.exec(createstr);
+// db.exec(createstr);
 
+db.drop();
+db.init();
 
 
 const {authenticatedLndGrpc} = require('ln-service');
@@ -251,6 +179,7 @@ if (attempt_to_connect_to_lnd_on_startup) {
 // })
 
 global.lnd = {};
+const ln = require('./libln');
 
 if (attempt_to_connect_to_lnd_on_startup) {
     try {
@@ -262,7 +191,6 @@ if (attempt_to_connect_to_lnd_on_startup) {
     
     // https://github.com/alexbosworth/ln-service#all-methods
 
-    const ln = require('./libln');
 
     console.log('Getting node info...');
     ln.getNodeInfo();
@@ -558,7 +486,7 @@ wsServer.on('connection', (socket, req) => {
             // console.log(JSON.stringify(msg,null,2));
             if (trg >= now) {
                 console.log("adding Event for later...");
-                const ev = eventMgr.addEvent({  "type": EventType.NOSTR_DM, "label": "deferred", "creator": "unknown", "trigger": msg.trigger, "dest": msg.relay, "data": JSON.stringify(msg.event) });
+                const ev = db.addEvent({  "type": EventType.NOSTR_DM, "label": "deferred", "creator": "unknown", "trigger": msg.trigger, "dest": msg.relay, "data": JSON.stringify(msg.event) });
             } else {
                 console.log('trigger is in the past');
             }
@@ -572,23 +500,23 @@ wsServer.on('connection', (socket, req) => {
 
         } else if (msg.action == "addTimeSlot") {
             console.log('addTimeSlot for ' + msg.hpk + " " + msg.start + " " + msg.duration + " " + msg.satsmin + " " + msg.quote);
-            const addedID = timeSlotMgr.addTimeSlot({  "label": "add", "creator": msg.hpk, "reservor": "unknown", "start": msg.start, "pause": 0, "duration":  (msg.duration * 60), "satsmin": msg.satsmin, "quote": msg.quote, "currency": "usd", "state": "created"});
+            const addedID = db.addTimeSlot({  "label": "add", "creator": msg.hpk, "reservor": "unknown", "start": msg.start, "pause": 0, "duration":  (msg.duration * 60), "satsmin": msg.satsmin, "quote": msg.quote, "currency": "usd", "state": "created"});
             console.log('addedID: ' + addedID);
         } else if (msg.action == "delTimeSlot") {
             console.log('delTimeSlot for ' + msg.hpk + " " + msg.slotID);
-            const result = timeSlotMgr.delTimeSlot(msg.slotID);
+            const result = db.delTimeSlot(msg.slotID);
             console.log('deleted...: ' + msg.slotID);
         } else if (msg.action == "resTimeSlot") {
             console.log('resTimeSlot for ' + msg.hpk + " " + msg.slotID);
-            const result = timeSlotMgr.resTimeSlot(msg.slotID, msg.hpk);
+            const result = db.resTimeSlot(msg.slotID, msg.hpk);
             console.log('reserved...: ' + msg.slotID);
         } else if (msg.action == "cnfTimeSlot") {
             console.log('cnfTimeSlot for ' + msg.hpk + " " + msg.slotID);
-            const result = timeSlotMgr.cnfTimeSlot(msg.slotID, msg.hpk);
+            const result = db.cnfTimeSlot(msg.slotID, msg.hpk);
             console.log('confirmed...: ' + msg.slotID);
         } else if (msg.action == "getTimeSlots") {
             console.log('getTimeSlots for ' + msg.hpk);
-            const createdTimeSlots = timeSlotMgr.getCreatorTimeSlots(msg.hpk);
+            const createdTimeSlots = db.getCreatorTimeSlots(msg.hpk);
             // broadcast(JSON.stringify({ type: "timeslots", slots: createdTimeSlots}));
             if ((msg.hpk == eehpk) || (msg.hpk == orhpk)) {
                 notify_listeners(msg.hpk, JSON.stringify({ type: "timeslots", slots: createdTimeSlots}));
@@ -603,23 +531,61 @@ wsServer.on('connection', (socket, req) => {
             console.log('doPause Action ' + msg.action + " on " + msg.slotID + " by " + msg.pauser);
             notify_listeners(msg.hpk, JSON.stringify({ type: "paused", pauser: msg.pauser, slotID: msg.slotID}));
             if (msg.hpk == msg.pauser) {
-                timeSlotMgr.setTimeSlotState(msg.slotID, "paused_creator");
+                db.setTimeSlotState(msg.slotID, "paused_creator");
             } else {
-                timeSlotMgr.setTimeSlotState(msg.slotID, "paused_reservor");
+                db.setTimeSlotState(msg.slotID, "paused_reservor");
             }
         } else if (msg.action == "resume") {
             console.log('doResume Action' + msg.action + " on " + msg.slotID + " by " + msg.pauser);
             notify_listeners(msg.hpk, JSON.stringify({ type: "resumed", resumer: msg.resumer, slotID: msg.slotID}));
-            timeSlotMgr.setTimeSlotState(msg.slotID, "in_progress");
+            db.setTimeSlotState(msg.slotID, "in_progress");
         } else if (msg.action == "end") {
             console.log('doEnd Action ' + msg.action + " on " + msg.slotID + " by " + msg.pauser);
             notify_listeners(msg.hpk, JSON.stringify({ type: "ended", ender: msg.ender, slotID: msg.slotID}));
-            timeSlotMgr.setTimeSlotState(msg.slotID, "completed");
+            db.setTimeSlotState(msg.slotID, "completed");
         } else if (msg.action == "receive-invoice") {
             console.log('receive invoice: ' + JSON.stringify(msg,null,2));
-            notify_reservor(msg.reservor, JSON.stringify({ type: "pay-invoice", creator: msg.creator, reservor: msg.reservor, invoice: msg.invoice }));
+            // Create the invoice
+
+            // const ln = require('./libln');
+
+
+            // const newInvoice = await ln.getNewInvoiceInfo({lnd: lnd, tokens: 19, description: "next invoice 19"});
+            // console.log(`newInvoice: ${JSON.stringify(newInvoice, null, 2)}`);
+
+            // if (typeof newInvoice == "object") {
+            //     const deletedPayments = ln.delPendingPayments(tenantID);
+            //     console.log(`deletedPayments: ${JSON.stringify(deletedPayments, null, 2)}`);
+
+            //     const addedPayment = ln.addPendingPayment(tenantID,newInvoice.id);
+            //     console.log(`addedPayment: ${JSON.stringify(addedPayment, null, 2)}`);
+
+            // } else {
+            //     console.log("Unable to create a new invoice.  Is LND available?");
+            // }
+
+
+            // notify_reservor(msg.reservor, JSON.stringify({ type: "pay-invoice", creator: msg.creator, reservor: msg.reservor, invoice: msg.invoice }));
         } else if (msg.action == "pay-receipt") {
             console.log('pay-receipt: ' + JSON.stringify(msg,null,2));
+            ln.getInvoiceResult(msg.response.paymentHash).then((inv)=>{
+                console.log('getInvoiceResult: ' + JSON.stringify(inv,null,2));
+                if (inv.is_confirmed) {
+                    console.log('Payment is complete...');
+                    db.delPendingPaymentID(msg.response.paymentHash); // 
+                    db.setTimeSlotState(msg.slotID, "in_progress"); // 
+                    notify_listeners(msg.hpk, JSON.stringify({ type: "resumed", resumer: msg.resumer, slotID: msg.slotID}));
+                }
+                // if (db.isPaymentPending(msg.creator,inv.paymentHash)) {
+                //     db.delPendingPaymentID(msg.creator,inv.paymentHash);
+                //     console.log('Payment is complete...');
+                // }
+            });
+            // check if the payment is valid
+        } else if (msg.action == "user-rejected") {
+            console.log('user-rejected: ' + JSON.stringify(msg,null,2));
+            // Need to figure out if we resend the invoice or not
+            notify_creator(msg.creator, JSON.stringify({ type: "rejected", creator: msg.creator, reservor: msg.reservor, slotID: msg.slotID, response: msg.response }));
         } else {
             console.log('Unknown Action' + msg.action);
         }
@@ -858,6 +824,18 @@ global.notify_reservor = function(hpk,data) {
     console.log('notified...'+(nidx-1)+'..of..'+idx);
 }
 
+global.isConnected = function(hpk) {
+    
+    var found = false
+    wsServer.clients.forEach(client => {
+        if ((client.payor == hpk)  && (client.readyState === ws.OPEN)) {
+            // console.log("client: " + idx + " ee:" + client.payee + " or:" + client.payor);
+            found = true;
+        }
+    });
+    return(found);
+}
+
 // =============================================================================    
 
 
@@ -980,241 +958,25 @@ async function make_dm_event(emsg, pubkey) {
 
 // =============================================================================    
 
-  
-// Singleton pattern implementation for TimeSlotManager
-var TimeSlotManager = (function() {
-    var instance;
-
-    function init() {
-        // Private methods and variables
-        return {
-            addTimeSlot: function(timeslot) {
-                // Generate unique ID and set creation timestamp
-                var uuid = uid.sync(8);
-                timeslot.id = uuid;
-                timeslot.created = Date.now();
-                console.log("uuid: " + uuid);
-                // timeslot.reservor = "unknown";
-                // timeslot.state = TimeSlotState.CREATED;
-                
-                // Insert timeslot into the SQLite database using transactions for better-sqlite3
-                const stmt = db.prepare("INSERT INTO timeslots VALUES (@id, @label, @created, @creator, @reservor, @start, @pause, @duration, @satsmin, @quote, @currency, @state)");
-                const result = stmt.run(timeslot);
-                
-                return uuid;
-            },
-            delTimeSlot: function(uuid) {
-                // First check to make sure it's not reserved!!!
-                // Delete timeslot from the SQLite database using transactions for better-sqlite3
-                const stmt = db.prepare("DELETE FROM timeslots WHERE id = ?");
-                const result = stmt.run(uuid);
-                return result;
-            },
-            resTimeSlot: function(uuid, reservor) {
-                // First check to make sure it's not deleted!!!
-                // Update timeslot from the SQLite database using transactions for better-sqlite3 such that reservor = reservor and state = TimeSlotState.RESERVED
-                const stmt = db.prepare("UPDATE timeslots SET state = ?, reservor = ? WHERE id = ?");
-                const result = stmt.run(TimeSlotState.RESERVED,reservor,uuid);
-                return result;
-            },
-            cnfTimeSlot: function(uuid, creator) {
-                // First check to make sure it's not deleted!!!
-                // Update timeslot from the SQLite database using transactions for better-sqlite3 such that reservor = reservor and state = TimeSlotState.RESERVED
-                const stmt = db.prepare("UPDATE timeslots SET state = ? WHERE id = ?");
-                const result = stmt.run(TimeSlotState.CONFIRMED,uuid);
-                return result;
-            },
-            dumpTimeSlots: function(key, ascend = true) {
-                // Retrieve and display timeslots sorted by the specified key
-                let order = ascend ? 'ASC' : 'DESC';
-                const stmt = db.prepare(`SELECT * FROM timeslots ORDER BY ${key} ${order}`);
-                const rows = stmt.all();
-                rows.forEach(row => {
-                    console.log(`uuid: ${row.id} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} start: ${row.start} pause: ${row.pause} duration: ${row.duration} satsmin: ${row.satsmin} state: ${row.state}`);
-                });
-            },
-            getAllTimeSlots: function(key, ascend = true) {
-                let order = ascend ? 'ASC' : 'DESC';
-                const stmt = db.prepare(`SELECT * FROM timeslots ORDER BY ${key} ${order}`);
-                const rows = stmt.all();
-                return rows;    
-            },
-            updateExpiredTimeSlots: function(timeNow, graceSecs = 0) {
-                const stmt = db.prepare(`SELECT * FROM timeslots`);
-                const rows = stmt.all();
-                numExpired = 0;
-                rows.forEach(row => {
-                    console.log(`uuid: ${row.id} label: ${row.label} start: ${row.start} pause: ${row.pause} duration: ${row.duration} state: ${row.state}`);
-                    let endTime = row.start + row.pause + row.duration + graceSecs;
-                    if (timeNow > endTime) {
-                        console.log("Expired: " + row.id);
-                        const stmt = db.prepare("UPDATE timeslots SET state = ? WHERE id = ?");
-                        const result = stmt.run(TimeSlotState.EXPIRED, row.id);
-                        numExpired++;
-                    }
-                });
-                return numExpired;    
-            },
-            getAllTimeSlots4Period: function(key, ascend = true, startTime, endTime, state = "confirmed") {
-                let order = ascend ? 'ASC' : 'DESC';
-                 const stmt = db.prepare(`SELECT * FROM timeslots WHERE ? <= start AND start < ? AND state = '${state}' ORDER BY ${key} ${order}`);
-                 const rows = stmt.all(startTime,endTime);
-                 return rows;    
-            },
-            getInProgressTimeSlots4Period: function(key, ascend = true, startTime, endTime) {
-                let order = ascend ? 'ASC' : 'DESC';
-                 const stmt = db.prepare(`SELECT * FROM timeslots WHERE ? <= start AND start < ? AND (state = 'in_progress' OR state = 'paused_creator' OR state = 'paused_reservor') ORDER BY ${key} ${order}`);
-                 const rows = stmt.all(startTime,endTime);
-                 return rows;    
-            },
-            getCreatorTimeSlots: function(creator, key = "start", ascend = true, state = null) {
-                let order = ascend ? 'ASC' : 'DESC';
-                var querystring = ``;
-                if (state == null) {
-                    querystring = `SELECT * FROM timeslots WHERE creator = ? ORDER BY ${key} ${order}`;
-                } else {
-                    querystring = `SELECT * FROM timeslots WHERE creator = ? AND state = ? ORDER BY ${key} ${order}`;
-                }
-                const stmt = db.prepare(querystring);
-                var rows = [];
-                if (state == null) {
-                    rows = stmt.all(creator);
-                } else {
-                    rows = stmt.all(creator, state);
-                }
-
-                return rows;    
-            },
-            getReservorTimeSlots: function(reservor, key, state, ascend = true) {
-                let order = ascend ? 'ASC' : 'DESC';
-                const stmt = db.prepare(`SELECT * FROM timeslots WHERE reservor = ? AND state = ? ORDER BY ${key} ${order}`);
-                const rows = stmt.all(reservor, state);
-                return rows;    
-            },
-            reserveTimeSlot: function(id, reservor) {
-                const stmt = db.prepare("UPDATE timeslots SET reservor = ?, state = ? WHERE id = ?");
-                const result = stmt.run(reservor, TimeSlotState.RESERVED, id);
-            },
-            setTimeSlotState: function(id, newState) {
-                const stmt = db.prepare("UPDATE timeslots SET state = ? WHERE id = ?");
-                const result = stmt.run(newState, id);
-            },
-            setTimeSlotPause: function(id, pauseSecs) {
-                const stmt = db.prepare("UPDATE timeslots SET pause = ? WHERE id = ?");
-                const result = stmt.run(pauseSecs, id);
-            }
-        };
-    }
-
-    return {
-        getInstance: function() {
-            if (!instance) {
-                instance = init();
-            }
-            return instance;
-        }
-    };
-})();
-
-// Get an instance of TimeSlotManager
-var timeSlotMgr = TimeSlotManager.getInstance();
 
 // Add initial time slots
 // const justNow = Math.floor((Date.now()/10000)*10);
-// const first = timeSlotMgr.addTimeSlot({  "label": "1st", "creator": vacuum8, "reservor": "unknown", "start": justNow + (5 * 60), "duration": 30, "satsmin": 1100, "quote": 11.234, "currency": "usd"});
-// const second = timeSlotMgr.addTimeSlot({ "label": "2nd", "creator": horologger, "reservor": vacuum8, "start": (justNow + (60)), "duration": 125, "satsmin": 1200, "quote": 12.234, "currency": "usd", "state": 'confirmed'});
-// const third = timeSlotMgr.addTimeSlot({  "label": "3rd", "creator": horologger, "reservor": "unknown", "start": justNow + (19 * 60), "duration": 20, "satsmin": 1300, "quote": 13.234, "currency": "usd"});
-// const fourth = timeSlotMgr.addTimeSlot({ "label": "4th", "creator": horologger, "reservor": "unknown", "start": justNow + (40 * 60), "duration": 30, "satsmin": 1400, "quote": 14.234, "currency": "usd"});
-// const fifth = timeSlotMgr.addTimeSlot({  "label": "5th", "creator": vacuum8, "reservor": "unknown", "start": justNow + (35 * 60), "duration": 30, "satsmin": 1500, "quote": 15.234, "currency": "usd"});
+// const first = db.addTimeSlot({  "label": "1st", "creator": vacuum8, "reservor": "unknown", "start": justNow + (5 * 60), "duration": 30, "satsmin": 1100, "quote": 11.234, "currency": "usd"});
+// const second = db.addTimeSlot({ "label": "2nd", "creator": horologger, "reservor": vacuum8, "start": (justNow + (60)), "duration": 125, "satsmin": 1200, "quote": 12.234, "currency": "usd", "state": 'confirmed'});
+// const third = db.addTimeSlot({  "label": "3rd", "creator": horologger, "reservor": "unknown", "start": justNow + (19 * 60), "duration": 20, "satsmin": 1300, "quote": 13.234, "currency": "usd"});
+// const fourth = db.addTimeSlot({ "label": "4th", "creator": horologger, "reservor": "unknown", "start": justNow + (40 * 60), "duration": 30, "satsmin": 1400, "quote": 14.234, "currency": "usd"});
+// const fifth = db.addTimeSlot({  "label": "5th", "creator": vacuum8, "reservor": "unknown", "start": justNow + (35 * 60), "duration": 30, "satsmin": 1500, "quote": 15.234, "currency": "usd"});
 
 // =============================================================================    
 
-  
-// Singleton pattern implementation for EventManager
-var EventManager = (function() {
-    var instance;
-
-    function init() {
-        // Private methods and variables
-        return {
-            addEvent: function(event) {
-                // Generate unique ID and set creation timestamp
-                var uuid = uid.sync(8);
-                event.id = uuid;
-                // event.type = EventType.INFO; // Should already be set
-                event.created = Date.now();
-                console.log("uuid: " + uuid);
-                event.reservor = "unknown";
-                event.state = EventState.ACTIVE;
-                
-                // Insert event into the SQLite database using transactions for better-sqlite3
-                const stmt = db.prepare("INSERT INTO events VALUES (@id, @type, @label, @created, @creator, @reservor, @trigger, @dest, @data, @state)");
-                const result = stmt.run(event);
-                
-                return uuid;
-            },
-            delEvent: function(uuid) {
-                // First check to make sure it's not reserved!!!
-                // Delete event from the SQLite database using transactions for better-sqlite3
-                const stmt = db.prepare("DELETE FROM events WHERE id = ?");
-                const result = stmt.run(uuid);
-                return result;
-            },
-            dumpEvents: function(key, ascend = true) {
-                // Retrieve and display events sorted by the specified key
-                let order = ascend ? 'ASC' : 'DESC';
-                const stmt = db.prepare(`SELECT * FROM events ORDER BY ${key} ${order}`);
-                const rows = stmt.all();
-                rows.forEach(row => {
-                    console.log(`uuid: ${row.id} type: ${row.type} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} trigger: ${row.trigger} state: ${row.state}`);
-                });
-            },
-            getFutureEvents: function(key, ascend = true, timeNow) {
-                let order = ascend ? 'ASC' : 'DESC';
-                const stmt = db.prepare(`SELECT * FROM events WHERE trigger >= ${timeNow} ORDER BY ${key} ${order}`);
-                const rows = stmt.all();
-                return rows;    
-            },
-            getActiveEvents: function(key, ascend = true) {
-                let order = ascend ? 'ASC' : 'DESC';
-                const stmt = db.prepare(`SELECT * FROM events WHERE state = 'active' ORDER BY ${key} ${order}`);
-                const rows = stmt.all();
-                return rows;    
-            },
-            getAllEvents: function(key, ascend = true) {
-                let order = ascend ? 'ASC' : 'DESC';
-                const stmt = db.prepare(`SELECT * FROM events ORDER BY ${key} ${order}`);
-                const rows = stmt.all();
-                return rows;    
-            },
-            setEventState: function(id, newState) {
-                const stmt = db.prepare("UPDATE events SET state = ? WHERE id = ?");
-                const result = stmt.run(newState, id);
-            }
-        };
-    }
-
-    return {
-        getInstance: function() {
-            if (!instance) {
-                instance = init();
-            }
-            return instance;
-        }
-    };
-})();
-
-// Get an instance of EventManager
-var eventMgr = EventManager.getInstance();
-
 // Add initial events
-const ev1 = eventMgr.addEvent({  "label": "4later", "type": EventType.INFO, "creator": "unknown", "trigger": Math.floor(Date.now()/1000) + (1 * 15), dest: "ws://localhost:8080", "data": JSON.stringify({action: "info", hpk: "unknown"})});
+const ev1 = db.addEvent({  "label": "4later", "type": tictype.EventType.INFO, "creator": "unknown", "trigger": Math.floor(Date.now()/1000) + (1 * 15), dest: "ws://localhost:8080", "data": JSON.stringify({action: "info", hpk: "unknown"})});
 
-// const ev2 = eventMgr.addEvent({  "label": "in30s", "type": EventType.INFO, "creator": "unknown", "trigger": Math.floor(Date.now()/1000) + (1 * 30), dest: "ws://localhost:8080", "data": JSON.stringify({action: "info", hpk: "unknown"})});
+// const ev2 = db.addEvent({  "label": "in30s", "type": EventType.INFO, "creator": "unknown", "trigger": Math.floor(Date.now()/1000) + (1 * 30), dest: "ws://localhost:8080", "data": JSON.stringify({action: "info", hpk: "unknown"})});
 
 async function processOutbox(timeNow) {
     // Get all events in the future
-    const futureEvents = eventMgr.getActiveEvents("trigger", true);
+    const futureEvents = db.getActiveEvents("trigger", true);
     futureEvents.forEach(async event => {
         // console.log("future event: " + JSON.stringify(event));
         console.log(event.trigger + " <= " + timeNow + " " + Math.floor((event.trigger - timeNow)/60) + " minutes or " + (event.trigger - timeNow) + " seconds away...");
@@ -1244,7 +1006,7 @@ async function processOutbox(timeNow) {
             }
 
 
-            eventMgr.setEventState(event.id, EventState.TRIGGERED);
+            db.setEventState(event.id, tictype.EventState.TRIGGERED);
         }
     });
 
@@ -1252,19 +1014,22 @@ async function processOutbox(timeNow) {
 
 function manageSessions(timeNow) {
     console.log("manageSessions...");
-    const numExpired = timeSlotMgr.updateExpiredTimeSlots(timeNow, 60);
+    const numExpired = db.updateExpiredTimeSlots(timeNow, 120);
     if (numExpired > 0) { 
         console.log(numExpired + " expired time slots...");
     }
-    timeSlotMgr.dumpTimeSlots("start", true);
-    var slots = timeSlotMgr.getAllTimeSlots4Period("start", true, timeNow, timeNow + (5 * 60), "confirmed");
+
+    db.dumpTimeSlots("start", true);
+
+    // Find upcoming time slots
+    var slots = db.getAllTimeSlots4Period("start", true, timeNow, timeNow + (5 * 60), "confirmed");
     slots.forEach(async slot => {
         const insecs = slot.start - timeNow;
         console.log("upcoming: " + slot.id + ": " + slot.start + " >= " + timeNow + " " + insecs + " seconds away...");
         notify_listeners(slot.creator, JSON.stringify({ type: "pending-session", insecs: insecs }));
         if (insecs <= 5) {
             if (slot.state == "confirmed") {
-                timeSlotMgr.setTimeSlotState(slot.id, "in_progress");
+                db.setTimeSlotState(slot.id, "in_progress");
             }
             notify_listeners(slot.creator, JSON.stringify({ type: "in_progress", slots: slots }));
         }
@@ -1273,7 +1038,7 @@ function manageSessions(timeNow) {
 // const timeNow = Math.round(new Date().getTime() / 1000);
 // const slot_start = timeNow - 10;   // 100 secs since start
 // const slot_duration = 90;
-// const invoicePeriod = (1 * 40); // in seconds
+// const invoicePeriod = (1 * 30); // in seconds
 
 // const endsecs = slot_start + slot_duration; // duration is in seconds
 // const forsecs = timeNow - slot_start;
@@ -1286,45 +1051,154 @@ function manageSessions(timeNow) {
 // console.log("slot_start: " + slot_start); console.log("slot_duration: " + slot_duration);
 // console.log("forsecs: " + forsecs); console.log("secsremaining: " + secsremaining);
 
-    const invoicePeriod = (1 * 40); // in seconds
-    // var slots = timeSlotMgr.getAllTimeSlots4Period("start", true, timeNow - (60 * 60), timeNow + (1 * 60), "in_progress");
-    var slots = timeSlotMgr.getInProgressTimeSlots4Period("start", true, timeNow - (60 * 60), timeNow + (1 * 60));
+// console.log("durationPerc: " + durationPerc);
+
+    // Find in progress time slots
+    const invoicePeriod = (1 * 60); // in seconds
+    // var slots = db.getAllTimeSlots4Period("start", true, timeNow - (60 * 60), timeNow + (1 * 60), "in_progress");
+    var slots = db.getInProgressTimeSlots4Period("start", true, timeNow - (60 * 60), timeNow + (1 * 60));
     
+    var bothConnected = false;
+
     slots.forEach(async slot => {
-        if ((slot.state == "paused_creator") || (slot.state == "paused_reservor")) {
+        if ((slot.state == "paused_creator") || (slot.state == "paused_reservor") || (slot.state == "paused_pending_payment")) {
             console.log("slot.pause: " + slot.pause + " + timerInterval: " + timerInterval);
             var newPause = slot.pause + timerInterval;
-            timeSlotMgr.setTimeSlotPause(slot.id, newPause);
-        }
-        const endsecs = slot.start + slot.pause + slot.duration; // duration is in seconds
-        const forsecs = timeNow - slot.start - slot.pause;
-        const secsremaining = endsecs - timeNow;
-        var durationPercent = (Math.round(forsecs/(((slot.pause + slot.duration) / 100))));
-        if (durationPercent == 0) { durationPercent = 100; }
-        var invoicePercent = (Math.round((forsecs%invoicePeriod)/((invoicePeriod / 100))));
-        if (invoicePercent == 0) { invoicePercent = 100; }
-        const invoiceNow = (Math.round(forsecs/((invoicePeriod / 100)))%100 == 0);
-        const invoiceSoon = (invoicePercent >= 85);
-
-        console.log("forsecs: " + forsecs);
-        console.log("durationPercent: " + durationPercent);
-        console.log("invoicePercent: " + invoicePercent);
-        console.log("invoiceNow: " + invoiceNow);
-        console.log("invoiceSoon: " + invoiceSoon);
-
-
-
-        console.log("in_progress: " + slot.id + ": " + slot.start + " <= " + timeNow + " " + forsecs + " seconds since start... " + secsremaining + " seconds remaining...");
-        notify_listeners(slot.creator, JSON.stringify({ type: "in-progress", forsecs: forsecs, invsoon: invoiceSoon, invnow: invoiceNow, secsremaining: secsremaining, durperc: durationPercent, invperc: invoicePercent}));
-        if (invoiceNow) {
-            notify_creator(slot.creator, JSON.stringify({ type: "create-invoice", creator: slot.creator, reservor: slot.reservor, amtInSats: 10000 }));
+            db.setTimeSlotPause(slot.id, newPause);
         }
 
-        if (secsremaining <= 0) {
-            timeSlotMgr.setTimeSlotState(slot.id, "completed");
-            notify_listeners(slot.creator, JSON.stringify({ type: "completed", slots: slots }));
+        bothConnected = false;
+
+        // Need to check if both the creator and reservor are connected
+        if (isConnected(slot.creator)) {
+            console.log("Creator connected..." + slot.creator);
+            if (isConnected(slot.reservor)) {
+                console.log("Both connected...");
+                bothConnected = true;
+            } else {
+                console.log("Reservor not connected...");
+            }
+        } else if (isConnected(slot.reservor)) {
+            console.log("Reservor connected..." + slot.reservor);
+            console.log("Creator not connected...");
+        } else {
+            console.log("Neither party connected...");
         }
+
+        if (bothConnected) {
+            const endsecs = slot.start + slot.pause + slot.duration; // duration is in seconds
+            const forsecs = timeNow - slot.start - slot.pause;
+            const secsremaining = endsecs - timeNow;
+            var durationPercent = (Math.round(forsecs/(((slot.pause + slot.duration) / 100))));
+            if (durationPercent == 0) { durationPercent = 100; }
+            var invoicePercent = (Math.round((forsecs%invoicePeriod)/((invoicePeriod / 100))));
+            if (invoicePercent == 0) { invoicePercent = 100; }
+            const invoiceNow = (Math.round(forsecs/((invoicePeriod / 100)))%100 == 0);
+            const invoiceSoon = (invoicePercent >= 85);
+
+            var numInvoices = parseInt(Math.floor(slot.duration / invoicePeriod));
+            const partialFinalInvoice = (slot.duration % invoicePeriod != 0);
+            const satssec = slot.satsmin / 60;
+            const invoiceTotal = slot.duration * satssec;
+            const satsPerInvoice = satssec * invoicePeriod;
+            const satsFinalInvoice = invoiceTotal - (satsPerInvoice * numInvoices);
+
+            var periodNum = (Math.floor(forsecs / invoicePeriod)) + 1;
+            if (partialFinalInvoice) { numInvoices++; }
+
+            console.log("forsecs: " + forsecs);
+            console.log("satssec: " + satssec);
+            console.log("duration: " + slot.duration);
+            console.log("durationPercent: " + durationPercent);
+            console.log("invoicePercent: " + invoicePercent);
+            console.log("invoiceNow: " + invoiceNow);
+            console.log("invoiceSoon: " + invoiceSoon);
+            console.log("invoicePeriod: " + invoicePeriod);
+            console.log("numInvoices: " + numInvoices);
+            console.log("partialFinalInvoice: " + partialFinalInvoice);
+            console.log("invoiceTotal: " + invoiceTotal);
+            console.log("satsPerInvoice: " + satsPerInvoice);
+            console.log("satsFinalInvoice: " + satsFinalInvoice);
+            console.log("periodNum: " + periodNum + " of " + numInvoices);
+
+
+
+            console.log("in_progress: " + slot.id + ": " + slot.start + " <= " + timeNow + " " + forsecs + " seconds since start... " + secsremaining + " seconds remaining...");
+            // notify_listeners(slot.creator, JSON.stringify({ type: "in-progress", forsecs: forsecs, invsoon: invoiceSoon, invnow: invoiceNow, secsremaining: secsremaining, durperc: durationPercent, invperc: invoicePercent}));
+
+            // Check to see if there are any outstanding unpaid invoices
+            // if (db.anyPaymentsPending(slot.creator)) {
+            //     console.log("Outstanding invoices! ");
+            //     // Notify the creator
+            //     // notify_creator(slot.creator, JSON.stringify({ type: "outstanding-invoices", creator: slot.creator, reservor: slot.reservor, invoices: pendingPayments }));
+            //     // Pause the session
+            //     // db.setTimeSlotState(slot.id, "paused_pending_payment");
+            //     db.setTimeSlotState(slot.id, "paused_pending_payment");
+            //     notify_listeners(slot.creator, JSON.stringify({ type: "paused", pauser: slot.creator, slotID: slot.id}));
+            // }
+
+            // Check to see if there are any outstanding unpaid invoices
+            const paymentGracePeriod = 30 * 1000;   // 30 seconds
+            db.getPendingPayments(slot.creator).forEach(async payment => {
+                console.log("payment: " + JSON.stringify(payment, null, 2));
+                const now = new Date().getTime();
+                console.log("now: " + now);
+                if (payment.created >= (now - paymentGracePeriod)) { 
+                    console.log("Payment is still pending...within grace period");
+                }
+                ln.getInvoiceResult(payment.invoice).then((inv)=>{
+                    console.log('getInvoiceResult: ' + JSON.stringify(inv,null,2));
+                    if (inv.is_confirmed) {
+                        console.log('Payment is complete...');
+                        db.delPendingPaymentID(payment.invoice); //
+                        db.setTimeSlotState(slot.id, "in_progress"); // NOT WORKING
+                        notify_listeners(slot.creator, JSON.stringify({ type: "resumed", pauser: slot.creator, slotID: slot.id}));
+                    } else {
+                        console.log("Payment is still pending...resending invoice");
+                        db.setTimeSlotState(slot.id, "paused_pending_payment");
+                        notify_listeners(slot.creator, JSON.stringify({ type: "paused", pauser: slot.creator, slotID: slot.id}));
+                        notify_reservor(slot.reservor, JSON.stringify({ type: "pay-invoice", creator: slot.creator, reservor: slot.reservor, slotID: slot.id, invoice: payment.request }));
+                    }
+                });
+            });
+
+            if (invoiceNow && (periodNum <= numInvoices)) {
+
+                // Don't ask the creator to create the invoice
+                // notify_creator(slot.creator, JSON.stringify({ type: "create-invoice", creator: slot.creator, reservor: slot.reservor, amtInSats: 10000 }));
+                
+                const invoiceDescription = "TiC " + shortenString(slot.creator) + " " + periodNum + " of " + numInvoices + " for " + satsPerInvoice +  " sats. Total Budget = " + invoiceTotal + " sats";
+                notify_creator(slot.creator, JSON.stringify({ type: "create-invoice", creator: slot.creator, reservor: slot.reservor, invoice: invoiceDescription }));
+                // notify_reservor(slot.reservor, JSON.stringify({ type: "pay-invoice", creator: slot.creator, reservor: slot.reservor, invoice: invoiceDescription }));
+                // Use the connection to LND to create it
+                ln.getNewInvoiceInfo({lnd: lnd, tokens: satsPerInvoice, description: invoiceDescription}).then((inv) => {
+                    console.log(`newInvoice: ${JSON.stringify(inv, null, 2)}`);
+                    db.addPendingPayment(slot.creator, inv.id, inv.request);
+                    // Notify the reservor
+                    notify_reservor(slot.reservor, JSON.stringify({ type: "pay-invoice", creator: slot.creator, reservor: slot.reservor, slotID: slot.id, invoice: inv.request }));
+                }
+                ).catch((error) => {
+                    console.error("Error creating invoice:", error);
+                }); 
+            }
+
+            if (secsremaining <= 0) {
+                db.setTimeSlotState(slot.id, "completed");
+                notify_listeners(slot.creator, JSON.stringify({ type: "completed", slots: slots }));
+            } else {
+                console.log("in_progress: " + slot.id + ": " + slot.start + " <= " + timeNow + " " + forsecs + " seconds since start... " + secsremaining + " seconds remaining...");
+                notify_listeners(slot.creator, JSON.stringify({ type: "in-progress", forsecs: forsecs, invsoon: invoiceSoon, invnow: invoiceNow, secsremaining: secsremaining, durperc: durationPercent, invperc: invoicePercent}));
+            }
+        } 
     });
+
+    // Find completed time slots
+    // console.log(" Looking for completed time slots... " + timeNow);
+    // var slots = db.getAllTimeSlots4Period("start", true, timeNow - (60 * 60), timeNow, "completed");
+    // slots.forEach(async slot => {
+    //     console.log("completed: " + slot.id + ": " + slot.start + " <= " + timeNow);
+    //     notify_listeners(slot.creator, JSON.stringify({ type: "completed", slots: slots }));
+    // });
 
 }
 
@@ -1344,7 +1218,7 @@ function syncTimer() {
     if (now % 10 == 0) {
         console.log("sync " + now);
         clearInterval(myVar);
-        timeSlotMgr.addTimeSlot({ "label": "syncd", "creator": horologger, "reservor": vacuum8, "start": (now + (20)), "pause": (0), "duration": (90), "satsmin": 1200, "quote": 12.234, "currency": "usd", "state": 'confirmed'});
+        db.addTimeSlot({ "label": "syncd", "creator": horologger, "reservor": vacuum8, "start": (now + (20)), "pause": (0), "duration": (2 * 60), "satsmin": 150, "quote": 12.234, "currency": "usd", "state": 'confirmed'});
         myVar = setInterval(myTimer, (timerInterval * 1000));
     } else {
         console.log("sync in " + (10-(now%10)));
@@ -1365,9 +1239,9 @@ function myTimer() {
 
     processOutbox(now).then(() => {
         // Handle any post-processing logic here
-        console.log("Outbox processed...");
+        // console.log("Outbox processed...");
         manageSessions(now);
-        console.log("Sessions processed...");
+        // console.log("Sessions processed...");
     }).catch((error) => {
         console.error("Error processing outbox:", error);
     });

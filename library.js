@@ -12,234 +12,186 @@ module.exports = {
 	fetchById: fetchById,
 	checkSecret: checkSecret,
 	fetchByToken: fetchByToken,
-	getTenantByID: getTenantByID
+	getTenantByID: getTenantByID,
+	addTimeSlot: addTimeSlot,
+	delTimeSlot: delTimeSlot,
+	resTimeSlot: resTimeSlot,
+	cnfTimeSlot: cnfTimeSlot,
+	dumpTimeSlots: dumpTimeSlots,
+	getAllTimeSlots: getAllTimeSlots,
+	updateExpiredTimeSlots: updateExpiredTimeSlots,
+	getAllTimeSlots4Period: getAllTimeSlots4Period,
+	getInProgressTimeSlots4Period: getInProgressTimeSlots4Period,
+	getCreatorTimeSlots: getCreatorTimeSlots,
+	getReservorTimeSlots: getReservorTimeSlots,
+	reserveTimeSlot: reserveTimeSlot,
+	setTimeSlotState: setTimeSlotState,
+	setTimeSlotPause: setTimeSlotPause,
+	addEvent: addEvent,
+	delEvent: delEvent,
+	dumpEvents: dumpEvents,
+	getFutureEvents: getFutureEvents,
+	getActiveEvents: getActiveEvents,
+	getAllEvents: getAllEvents,
+	setEventState: setEventState,
+	addPendingPayment: addPendingPayment,
+	delPendingPayments: delPendingPayments,
+	delPendingPaymentID: delPendingPaymentID,
+	getPendingPayments: getPendingPayments,
+	isPaymentPending: isPaymentPending,
+	anyPaymentsPending: anyPaymentsPending
 };
 
 const Database = require("better-sqlite3");
-const db = new Database('data/crypto-rates.db', { verbose: console.log }); // or ':memory:'
+// const db = new Database('data/crypto-rates.db', { verbose: console.log }); // or ':memory:'
+const db = new Database('data/time-into-crypto.db'); // or ':memory:'
 db.pragma('synchronous = 2'); // Force write-through to file system
+
+// Importing necessary modules
+var uid = require('uid-safe');
+
+const tictype = require('./libtypes');
 
 // https://sqlite.org/lang_createtable.html
 function init() {
-    console.log("do_DB_Init");
+    // console.log("do_DB_Init");
 	//          1         2         3         4         5         6     6   7
 	// 1234567890123456789012345678901234567890123456789012345678901234567890
 	// 0334c29a37fe5d9d5ab8882855c75745f5b5d29cb2c6424fae138a29b248c6cd64
 	var createstr = '';
 
+	// db.exec("CREATE TABLE timeslots (
+	// 	id TEXT, 
+	// 	label TEXT, 
+	// 	created INTEGER, 
+	// 	creator TEXT, 
+	// 	reservor TEXT, 
+	// 	start INTEGER, 
+	// 	pause INTEGER, 
+	// 	duration INTEGER, 
+	// 	satsmin INTEGER, 
+	// 	quote REAL, 
+	// 	currency TEXT, 
+	// 	state INTEGER)");
 
-	createstr  = 'CREATE TABLE IF NOT EXISTS planType (';
-	createstr += 'type CHAR(1) PRIMARY KEY NOT NULL, ';
-	createstr += 'name CHAR(8) NOT NULL, ';
-	createstr += 'seq INTEGER';
-	createstr += ')';
-
-    stmt = db.prepare(createstr);
-    info = stmt.run();
-    console.log(info.changes);
-
-	var insertstr = "";
-	
-	insertstr = "INSERT INTO planType(type, name, seq) VALUES ('F','Free',1)";		// Free plan
-	stmt = db.prepare(insertstr);
-	info = stmt.run();
-	console.log(info.changes);
-
-	insertstr = "INSERT INTO planType(type, name, seq) VALUES ('S','Standard',2)";	// Standard plan
-	stmt = db.prepare(insertstr);
-	info = stmt.run();
-	console.log(info.changes);
-
-	insertstr = "INSERT INTO planType(type, name, seq) VALUES ('X','Extra',3)";		// eXtra plan
-	stmt = db.prepare(insertstr);
-	info = stmt.run();
-	console.log(info.changes);
-
-
-	createstr  = 'CREATE TABLE IF NOT EXISTS tenantInfo (';
-	createstr += 'id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, ';
-	createstr += 'tenant CHAR(36), ';
-	createstr += 'nick VARCHAR(20), ';
-	createstr += 'pubkey CHAR(66), ';
-	createstr += 'clientid CHAR(36), ';
-	createstr += 'clientsecret CHAR(48), ';
-	createstr += 'scope CHAR(512) NOT NULL, ';
-	createstr += 'redirectUri CHAR(96), ';
-	createstr += "plan CHAR(1) NOT NULL DEFAULT ('F') REFERENCES planType(type) , ";
-	createstr += 'satoshi INTEGER DEFAULT 1000000 NOT NULL, ';
-	createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL, ';
-	createstr += 'modified DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
-	createstr += ')';
-	
-    stmt = db.prepare(createstr);
-    info = stmt.run();
-    console.log(info.changes);
-
-
-	insertstr  = "INSERT INTO tenantInfo(";
-	insertstr += 'tenant, ';
-	insertstr += 'nick, ';
-	insertstr += 'pubkey, ';
-	insertstr += 'clientid, ';
-	insertstr += 'clientsecret, ';
-	insertstr += 'scope, ';
-	insertstr += 'redirectUri ';
-	insertstr += ') VALUES (';
-	insertstr += '?,';
-	insertstr += '?,';
-	insertstr += '?,';
-	insertstr += '?,';
-	insertstr += '?,';
-	insertstr += '?,';
-	insertstr += '?)';
-
-	console.log("insertstr: " + insertstr);
-
-	stmt = db.prepare(insertstr);
-
-	info = stmt.run("0abbacab-0000-0000-0000-000000000000","client1","0334c29a37fe5d9d5ab8882855c75745f5b5d29cb2c6424fae138a29b248c6cd64","client1.id","client1.secret","uaa.resource","http://example.org/oauth2");
-	console.log(info.changes);
-
-	info = stmt.run("0abbacab-93b6-c0d6-70fe-711b8280fa0c","vacuum8","0334c29a37fe5d9d5ab8882855c75745f5b5d29cb2c6424fae138a29b248c6cd64","0abbacab-93b6-c0d6-70fe-711b8280fa0c","oYRbgIFYuc5IMLqGWJz3ASU9jwFmtYEepIW5","uaa.resource market-data-MRM-MRM_BYOD!b1736.marketdata","http://example.org/oauth2");
-	console.log(info.changes);
-
-	createstr  = 'CREATE TABLE IF NOT EXISTS rates (';
-	createstr += 'tenant CHAR(36) NOT NULL, ';
-	createstr += 'rate INTEGER, ';
-	createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
-	createstr += ')';
-
-    stmt = db.prepare(createstr);
-    info = stmt.run();
-    console.log(info.changes);
-
-	// 'access_token', 'refresh_token', 'authorization_code', 'client', 'user'
-
-	createstr  = 'CREATE TABLE IF NOT EXISTS access_token (';
-	createstr += 'token CHAR(64) NOT NULL, ';
-	createstr += 'userId CHAR(64), ';
-	createstr += 'clientId CHAR(64) NOT NULL, ';
-	createstr += 'scope CHAR(512) NOT NULL, ';
-	createstr += 'ttl INTEGER, ';
-	createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
-	createstr += ')';
-
-	stmt = db.prepare(createstr);
-    info = stmt.run();
-    console.log(info.changes);
-
-	createstr  = 'CREATE TABLE IF NOT EXISTS refresh_token (';
-	createstr += 'tenant CHAR(36) NOT NULL, ';
-	createstr += 'rate INTEGER, ';
-	createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
-	createstr += '';
-	createstr += ')';
-
-	stmt = db.prepare(createstr);
-    info = stmt.run();
-    console.log(info.changes);
-
-	createstr  = 'CREATE TABLE IF NOT EXISTS authorization_code (';
-	createstr += 'tenant CHAR(36) NOT NULL, ';
-	createstr += 'rate INTEGER, ';
-	createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
-	createstr += ')';
-
-	stmt = db.prepare(createstr);
-    info = stmt.run();
-    console.log(info.changes);
-
-	createstr  = 'CREATE TABLE IF NOT EXISTS client (';
-	createstr += 'id CHAR(36) NOT NULL, ';
-	createstr += 'name CHAR(36) NOT NULL, ';
-	createstr += 'secret CHAR(36) NOT NULL, ';
-	createstr += 'redirectUri CHAR(36) NOT NULL, ';
-	createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
-	createstr += ')';
-
-	stmt = db.prepare(createstr);
-    info = stmt.run();
-    console.log(info.changes);
-
-	createstr  = 'CREATE TABLE IF NOT EXISTS user (';
-	createstr += 'tenant CHAR(36) NOT NULL, ';
-	createstr += 'rate INTEGER, ';
-	createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
-	createstr += ')';
-
-	stmt = db.prepare(createstr);
-    info = stmt.run();
-    console.log(info.changes);
-
-	createstr  = 'CREATE TABLE IF NOT EXISTS pending_payments (';
-	createstr += 'tenant CHAR(36) NOT NULL, ';	// "1234567890123456789012345678901234567890123456789012345678901234"
-	createstr += 'invoice CHAR(64) NOT NULL, ';	// "bfa5d543c695f89bfe75ac7fc8076be5ccb8811b3be5dddff9e1d97503425de3"
-	createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
-	createstr += ')';
-
-    stmt = db.prepare(createstr);
-    info = stmt.run();
-    console.log(info.changes);
-
-	// createstr  = 'CREATE TABLE IF NOT EXISTS socket_connections (';
-	// createstr += 'id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, ';
-	// createstr += 'nick VARCHAR(20), ';
-	// createstr += 'pubkey CHAR(66), ';
-	// createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL ';
+	// createstr  = 'CREATE TABLE IF NOT EXISTS timeslots (';
+	// createstr += 'type CHAR(1) PRIMARY KEY NOT NULL, ';
+	// createstr += 'name CHAR(8) NOT NULL, ';
+	// createstr += 'seq INTEGER';
 	// createstr += ')';
+
+	createstr  = 'CREATE TABLE IF NOT EXISTS timeslots (';
+	createstr += 'id TEXT, ';
+	createstr += 'label TEXT, ';
+	createstr += 'created INTEGER, ';
+	createstr += 'creator TEXT, ';
+	createstr += 'reservor TEXT, ';
+	createstr += 'start INTEGER, ';
+	createstr += 'pause INTEGER, ';
+	createstr += 'duration INTEGER, ';
+	createstr += 'satsmin INTEGER, ';
+	createstr += 'quote REAL, ';
+	createstr += 'currency TEXT, ';
+	createstr += 'state INTEGER ';
+	createstr += ')';
+
+    stmt = db.prepare(createstr);
+    info = stmt.run();
+    // console.log(info.changes);
+
+	// var insertstr = "";
 	
-    // stmt = db.prepare(createstr);
-    // info = stmt.run();
+	// insertstr = "INSERT INTO planType(type, name, seq) VALUES ('F','Free',1)";		// Free plan
+	// stmt = db.prepare(insertstr);
+	// info = stmt.run();
+	// console.log(info.changes);
+
+	// db.exec("CREATE TABLE events (
+	// 	id TEXT, 
+	// 	type INTEGER, 
+	// 	label TEXT, 
+	// 	created INTEGER, 
+	// 	creator TEXT, 
+	// 	reservor TEXT, 
+	// 	trigger INTEGER, 
+	// 	dest TEXT, 
+	// 	data TEXT, 
+	// 	state INTEGER)");
+
+
+	createstr  = 'CREATE TABLE IF NOT EXISTS events (';
+	createstr += 'id TEXT, ';
+	createstr += 'type INTEGER, ';
+	createstr += 'label TEXT, ';
+	createstr += 'created INTEGER, ';
+	createstr += 'creator TEXT, ';
+	createstr += 'reservor TEXT, ';
+	createstr += 'trigger INTEGER, ';
+	createstr += 'dest TEXT, ';
+	createstr += 'data TEXT, ';
+	createstr += 'state INTEGER ';
+	createstr += ')';
+		
+    stmt = db.prepare(createstr);
+    info = stmt.run();
     // console.log(info.changes);
 
 
-// aef487d1-0879-4fb1-a8f4-2384b71226c2 CHAR(36)
+	// insertstr  = "INSERT INTO tenantInfo(";
+	// insertstr += 'tenant, ';
+	// insertstr += 'nick, ';
+	// insertstr += 'pubkey, ';
+	// insertstr += 'clientid, ';
+	// insertstr += 'clientsecret, ';
+	// insertstr += 'scope, ';
+	// insertstr += 'redirectUri ';
+	// insertstr += ') VALUES (';
+	// insertstr += '?,';
+	// insertstr += '?,';
+	// insertstr += '?,';
+	// insertstr += '?,';
+	// insertstr += '?,';
+	// insertstr += '?,';
+	// insertstr += '?)';
 
+	// console.log("insertstr: " + insertstr);
+
+	// stmt = db.prepare(insertstr);
+
+	// info = stmt.run("0abbacab-0000-0000-0000-000000000000","client1","0334c29a37fe5d9d5ab8882855c75745f5b5d29cb2c6424fae138a29b248c6cd64","client1.id","client1.secret","uaa.resource","http://example.org/oauth2");
+	// console.log(info.changes);
+
+	// info = stmt.run("0abbacab-93b6-c0d6-70fe-711b8280fa0c","vacuum8","0334c29a37fe5d9d5ab8882855c75745f5b5d29cb2c6424fae138a29b248c6cd64","0abbacab-93b6-c0d6-70fe-711b8280fa0c","oYRbgIFYuc5IMLqGWJz3ASU9jwFmtYEepIW5","uaa.resource market-data-MRM-MRM_BYOD!b1736.marketdata","http://example.org/oauth2");
+	// console.log(info.changes);
+
+	createstr  = 'CREATE TABLE IF NOT EXISTS pending_payments (';
+	createstr += 'creator CHAR(36) NOT NULL, ';	// "1234567890123456789012345678901234567890123456789012345678901234"
+	createstr += 'invoice CHAR(64) NOT NULL, ';	// "bfa5d543c695f89bfe75ac7fc8076be5ccb8811b3be5dddff9e1d97503425de3"
+	createstr += 'request TEXT NOT NULL, ';	// <Bolt 11 Invoice String>
+	createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
+	createstr += ')';
+
+    stmt = db.prepare(createstr);
+    info = stmt.run();
+    // console.log(info.changes);
+	
     //db.close();
 }
 
 // https://sqlite.org/lang_droptable.html
 function drop() {
-    console.log("do_DB_Drop");
+    // console.log("do_DB_Drop");
  
-    stmt = db.prepare('DROP TABLE IF EXISTS user');
+    stmt = db.prepare('DROP TABLE IF EXISTS timeslots');
     info = stmt.run();
-    console.log(info.changes);
+    // console.log(info.changes);
 
-    stmt = db.prepare('DROP TABLE IF EXISTS client');
+    stmt = db.prepare('DROP TABLE IF EXISTS events');
     info = stmt.run();
-    console.log(info.changes);
-
-    stmt = db.prepare('DROP TABLE IF EXISTS authorization_code');
-    info = stmt.run();
-    console.log(info.changes);
-
-    stmt = db.prepare('DROP TABLE IF EXISTS refresh_token');
-    info = stmt.run();
-    console.log(info.changes);
-
-    stmt = db.prepare('DROP TABLE IF EXISTS access_token');
-    info = stmt.run();
-    console.log(info.changes);
-
-    stmt = db.prepare('DROP TABLE IF EXISTS rates');
-    info = stmt.run();
-    console.log(info.changes);
-
-    stmt = db.prepare('DROP TABLE IF EXISTS tenantInfo');
-    info = stmt.run();
-    console.log(info.changes);
-
-    stmt = db.prepare('DROP TABLE IF EXISTS planType');
-    info = stmt.run();
-    console.log(info.changes);
+    // console.log(info.changes);
 
     stmt = db.prepare('DROP TABLE IF EXISTS pending_payments');
     info = stmt.run();
-    console.log(info.changes);
-
-    // stmt = db.prepare('DROP TABLE IF EXISTS socket_connections');
-    // info = stmt.run();
     // console.log(info.changes);
 
 }
@@ -248,9 +200,10 @@ function drop() {
 function prepare(sqlinput) {
 	var sqlout = 'SELECT now()';
 
-	if (true) {
+	var sqlin = sqlinput.trim();
 
-		var sqlin = sqlinput.trim();
+	// Handle all SQL requests if needed to impose tenant restrictions
+	if (false) {
 
 		// console.log("  sqlin:" + sqlin + ":");
 
@@ -260,7 +213,7 @@ function prepare(sqlinput) {
 				// `SELECT rate, created FROM rates`
 				sqlout = sqlin;
 				// `SELECT rate, created FROM rates WHERE tenant = tenantID`
-				sqlout += " WHERE tenant = '" + gtid + "'";
+				// sqlout += " WHERE tenant = '" + gtid + "'";
 				break;
 			case "INSERT":
 				// console.log("INSERT!");
@@ -280,7 +233,7 @@ function prepare(sqlinput) {
 				// `SELECT rate, created FROM rates`
 				sqlout = sqlin;
 				// `SELECT rate, created FROM rates WHERE tenant = tenantID`
-				sqlout += " WHERE tenant = '" + gtid + "'";
+				// sqlout += " WHERE tenant = '" + gtid + "'";
 				break;
             case "UPDATE":
 				break;
@@ -288,6 +241,8 @@ function prepare(sqlinput) {
 				break;
 		}
 		// console.log(" sqlout:" + sqlout + ":");
+	} else {
+		sqlout = sqlin;
 	}
 
 	return db.prepare(sqlout);
@@ -319,7 +274,7 @@ function check_nick_exists(nick) {
 	var found = false;
 
 	rows.forEach(row => {
-		console.log(row);
+		// console.log(row);
 		if (row.nick == nick) {
 			found = true;
 		}
@@ -331,7 +286,7 @@ function check_nick_exists(nick) {
 }
 
 function get_nick_from_pubkey(pubkey) {
-    console.log("get_nick_from_pubkey: " + pubkey);
+    // console.log("get_nick_from_pubkey: " + pubkey);
 
 
 	const rows = db.prepare(`SELECT nick,tenant FROM tenantInfo WHERE pubkey = '` + pubkey + `'`).all();
@@ -346,23 +301,23 @@ function get_nick_from_pubkey(pubkey) {
 	});
 
     //db.close();
-	console.log(lastnick);
+	// console.log(lastnick);
 	return({"nick": lastnick, "tenant": lasttenant});
 }
 
 
 function fetchById(clientid) {
-    console.log("fetchById: " + clientid);
+    // console.log("fetchById: " + clientid);
 
 	const tenant = db.prepare(`SELECT clientid,nick,clientsecret,scope,redirectUri FROM tenantInfo WHERE clientid = ?`).get(clientid);
 
-	console.log("tenant: " + JSON.stringify(tenant,null,2));
+	// console.log("tenant: " + JSON.stringify(tenant,null,2));
 
 	return tenant;
 }
 
 function fetchByToken(token) {
-    console.log("fetchByToken: " + token);
+    // console.log("fetchByToken: " + token);
 
 	const access_token = db.prepare(`SELECT token,userId,clientId,scope,ttl FROM access_token WHERE token = ?`).get(token);
 
@@ -378,23 +333,23 @@ function fetchByToken(token) {
 }
 
 function checkSecret(client, secret) {
-    console.log("checkSecret: " + secret);
+    // console.log("checkSecret: " + secret);
 
 	const tenant = db.prepare(`SELECT clientid,clientsecret FROM tenantInfo WHERE clientid = ?`).get(client.id);
 
-	console.log("tenant: " + JSON.stringify(tenant,null,2));
+	// console.log("tenant: " + JSON.stringify(tenant,null,2));
 
 	if ((tenant) && (typeof tenant == "object") && (typeof tenant.clientsecret == "string") && (tenant.clientsecret == secret)) {
-		console.log("Secret Matches " + secret);
+		// console.log("Secret Matches " + secret);
 		return true;
 	} else {
-		console.log("Secret DOES NOT Match " + secret);
+		// console.log("Secret DOES NOT Match " + secret);
 		return false;
 	}
 }
 
 function getTenantByID(tenantID) {
-    console.log("getTenantByID: " + tenantID);
+    // console.log("getTenantByID: " + tenantID);
 
 	const tenant = db.prepare(`SELECT tenant,nick,pubkey,clientid,scope,redirectUri,plan,satoshi FROM tenantInfo WHERE tenant = ?`).get(tenantID);
 
@@ -421,7 +376,7 @@ function generatePassword() {
 }
 
 function tenant_register(tenantID,nick,pubKey) {
-    console.log("tenant_register: " + tenantID);
+    // console.log("tenant_register: " + tenantID);
 
 
 	const rows = db.prepare(`SELECT tenant FROM tenantInfo`).all();
@@ -429,7 +384,7 @@ function tenant_register(tenantID,nick,pubKey) {
 	var found = false;
 
 	rows.forEach(row => {
-		console.log(row);
+		// console.log(row);
 		if (row.tenant == tenantID) {
 			found = true;
 		}
@@ -465,7 +420,7 @@ function tenant_register(tenantID,nick,pubKey) {
 		insertstr += '?,';
 		insertstr += '?)';
 	
-		console.log("insertstr: " + insertstr);
+		// console.log("insertstr: " + insertstr);
 	
 		const stmt = db.prepare(insertstr);
 	
@@ -508,19 +463,19 @@ function tenant_register(tenantID,nick,pubKey) {
 }
 
 function tenant_unregister(tenantID) {
-    console.log("tenant_unregister: " + tenantID + " is not implemented yet!");
+    // console.log("tenant_unregister: " + tenantID + " is not implemented yet!");
 	var found = false;
 	return found;
 }
 
 function admin_list_all(tenantID) {
-    console.log("admin_list_all: ");
+    // console.log("admin_list_all: ");
     const rows = db.prepare(`SELECT id, tenant, timeStamp FROM tenantInfo`).all();
     return rows;
 }
 
 function push_accessToken(token,userId,clientId,scope,ttl) {
-    console.log("push_accessToken: " + token);
+    // console.log("push_accessToken: " + token);
 
 	var insertstr  = "INSERT INTO access_token(";
 	insertstr += 'token, ';
@@ -535,8 +490,388 @@ function push_accessToken(token,userId,clientId,scope,ttl) {
 	insertstr += '?,';
 	insertstr += '?)';
 
-	console.log("insertstr: " + insertstr);
+	// console.log("insertstr: " + insertstr);
 
 	const stmt = db.prepare(insertstr);
 	stmt.run(token,userId,clientId,JSON.stringify(scope),ttl);
+}
+
+function addTimeSlot(timeslot) {
+    // console.log("addTimeSlot: " + JSON.stringify(timeslot)	);
+
+	var uuid = uid.sync(8);
+	timeslot.id = uuid;
+	timeslot.created = Date.now();
+	// console.log("uuid: " + uuid);
+	// timeslot.reservor = "unknown";
+	// timeslot.state = tictype.TimeSlotState.CREATED;
+
+	var insertstr  = "INSERT INTO timeslots(";
+	insertstr += 'id, ';
+	insertstr += 'label, ';
+	insertstr += 'created, ';
+	insertstr += 'creator, ';
+	insertstr += 'reservor, ';	
+	insertstr += 'start, ';	
+	insertstr += 'pause, ';	 
+	insertstr += 'duration, ';	 
+	insertstr += 'satsmin, ';	 
+	insertstr += 'quote, ';	 
+	insertstr += 'currency, ';	 
+	insertstr += 'state ';
+	insertstr += ') VALUES (';
+	insertstr += '?,';
+	insertstr += '?,';
+	insertstr += '?,';
+	insertstr += '?,';
+	insertstr += '?,';
+	insertstr += '?,';
+	insertstr += '?,';
+	insertstr += '?,';
+	insertstr += '?,';
+	insertstr += '?,';
+	insertstr += '?,';
+	insertstr += '?)';
+
+	// console.log("insertstr: " + insertstr);
+
+	const stmt = db.prepare(insertstr);
+	stmt.run(timeslot.id, timeslot.label, timeslot.created, timeslot.creator, timeslot.reservor, timeslot.start, timeslot.pause, timeslot.duration, timeslot.satsmin, timeslot.quote, timeslot.currency, timeslot.state);
+}
+
+function delTimeSlot(uuid) {
+    // console.log("delTimeSlot: " + uuid	);
+
+	const stmt = db.prepare("DELETE FROM timeslots WHERE id = ?");
+	const result = stmt.run(uuid);
+
+	return(result);
+}
+
+function resTimeSlot(uuid, reservor) {
+    // console.log("resTimeSlot: " + uuid	+ " by " + reservor);
+
+	const stmt = db.prepare("UPDATE timeslots SET state = ?, reservor = ? WHERE id = ?");
+	const result = stmt.run(tictype.TimeSlotState.RESERVED,reservor,uuid);
+
+	return(result);
+}
+
+function cnfTimeSlot(uuid, creator) {
+    // console.log("resTimeSlot: " + uuid	+ " by " + creator);
+
+	const stmt = db.prepare("UPDATE timeslots SET state = ? WHERE id = ?");
+	const result = stmt.run(tictype.TimeSlotState.CONFIRMED,uuid);
+
+	return(result);
+}
+
+function dumpTimeSlots(key, ascend = true) {
+	console.log("dumpTimeSlots: " + key + " " + ascend + "=====================================");
+	// Retrieve and display timeslots sorted by the specified key
+	let order = ascend ? 'ASC' : 'DESC';
+	const stmt = db.prepare(`SELECT * FROM timeslots ORDER BY ${key} ${order}`);
+	const rows = stmt.all();
+	rows.forEach(row => {
+		console.log(`uuid: ${row.id} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} start: ${row.start} pause: ${row.pause} duration: ${row.duration} satsmin: ${row.satsmin} state: ${row.state}`);
+	});
+	console.log("End dumpTimeSlots: " + key + " " + ascend + "=====================================");
+}
+
+function getAllTimeSlots(key, ascend = true) {
+	let order = ascend ? 'ASC' : 'DESC';
+	const stmt = db.prepare(`SELECT * FROM timeslots ORDER BY ${key} ${order}`);
+	const rows = stmt.all();
+	return rows;    
+}
+
+function updateExpiredTimeSlots(timeNow, graceSecs = 0) {
+	const stmt = db.prepare(`SELECT * FROM timeslots`);
+	const rows = stmt.all();
+	numExpired = 0;
+	rows.forEach(row => {
+		// console.log(`uuid: ${row.id} label: ${row.label} start: ${row.start} pause: ${row.pause} duration: ${row.duration} state: ${row.state}`);
+		let endTime = row.start + row.pause + row.duration + graceSecs;
+		if (timeNow > endTime) {
+			console.log("Expired: " + row.id);
+			const stmt = db.prepare("UPDATE timeslots SET state = ? WHERE id = ? AND state != 'completed'");
+			console.log("stmt: " + stmt);
+			const result = stmt.run(tictype.TimeSlotState.EXPIRED, row.id);
+			numExpired++;
+		}
+	});
+	return numExpired;    
+}
+
+function getAllTimeSlots4Period(key, ascend = true, startTime, endTime, state = "confirmed") {
+	let order = ascend ? 'ASC' : 'DESC';
+	const stmt = db.prepare(`SELECT * FROM timeslots WHERE ? <= start AND start < ? AND state = '${state}' ORDER BY ${key} ${order}`);
+	const rows = stmt.all(startTime,endTime);
+	return rows;    
+}
+
+function getInProgressTimeSlots4Period(key, ascend = true, startTime, endTime) {
+	let order = ascend ? 'ASC' : 'DESC';
+	const stmt = db.prepare(`SELECT * FROM timeslots WHERE ? <= start AND start < ? AND (state = 'in_progress' OR state = 'paused_creator' OR state = 'paused_reservor') ORDER BY ${key} ${order}`);
+	const rows = stmt.all(startTime,endTime);
+	return rows;    
+}
+
+function getCreatorTimeSlots(creator, key = "start", ascend = true, state = null) {
+	let order = ascend ? 'ASC' : 'DESC';
+	var querystring = ``;
+	if (state == null) {
+		querystring = `SELECT * FROM timeslots WHERE creator = ? ORDER BY ${key} ${order}`;
+	} else {
+		querystring = `SELECT * FROM timeslots WHERE creator = ? AND state = ? ORDER BY ${key} ${order}`;
+	}
+	const stmt = db.prepare(querystring);
+	var rows = [];
+	if (state == null) {
+		rows = stmt.all(creator);
+	} else {
+		rows = stmt.all(creator, state);
+	}
+
+	return rows;    
+}
+
+function getReservorTimeSlots(reservor, key, state, ascend = true) {
+	let order = ascend ? 'ASC' : 'DESC';
+	const stmt = db.prepare(`SELECT * FROM timeslots WHERE reservor = ? AND state = ? ORDER BY ${key} ${order}`);
+	const rows = stmt.all(reservor, state);
+	return rows;    
+}
+
+function reserveTimeSlot(id, reservor) {
+	const stmt = db.prepare("UPDATE timeslots SET reservor = ?, state = ? WHERE id = ?");
+	const result = stmt.run(reservor, tictype.TimeSlotState.RESERVED, id);
+}
+
+function setTimeSlotState(id, newState) {
+	const stmt = db.prepare("UPDATE timeslots SET state = ? WHERE id = ?");
+	const result = stmt.run(newState, id);
+}
+
+function setTimeSlotPause(id, pauseSecs) {
+	const stmt = db.prepare("UPDATE timeslots SET pause = ? WHERE id = ?");
+	const result = stmt.run(pauseSecs, id);
+}
+
+function addEvent(event) {
+	// Generate unique ID and set creation timestamp
+	var uuid = uid.sync(8);
+	event.id = uuid;
+	// event.type = EventType.INFO; // Should already be set
+	event.created = Date.now();
+	// console.log("uuid: " + uuid);
+	event.reservor = "unknown";
+	event.state = tictype.EventState.ACTIVE;
+	
+	// Insert event into the SQLite database using transactions for better-sqlite3
+	const stmt = db.prepare("INSERT INTO events VALUES (@id, @type, @label, @created, @creator, @reservor, @trigger, @dest, @data, @state)");
+	const result = stmt.run(event);
+	
+	return uuid;
+}
+
+function delEvent(uuid) {
+	// First check to make sure it's not reserved!!!
+	// Delete event from the SQLite database using transactions for better-sqlite3
+	const stmt = db.prepare("DELETE FROM events WHERE id = ?");
+	const result = stmt.run(uuid);
+	return result;
+}
+
+function dumpEvents(key, ascend = true) {
+	// Retrieve and display events sorted by the specified key
+	let order = ascend ? 'ASC' : 'DESC';
+	const stmt = db.prepare(`SELECT * FROM events ORDER BY ${key} ${order}`);
+	const rows = stmt.all();
+	rows.forEach(row => {
+		// console.log(`uuid: ${row.id} type: ${row.type} label: ${row.label} created: ${row.created} creator: ${row.creator} reservor: ${row.reservor} trigger: ${row.trigger} state: ${row.state}`);
+	});
+}
+
+function getFutureEvents(key, ascend = true, timeNow) {
+	let order = ascend ? 'ASC' : 'DESC';
+	const stmt = db.prepare(`SELECT * FROM events WHERE trigger >= ${timeNow} ORDER BY ${key} ${order}`);
+	const rows = stmt.all();
+	return rows;    
+}
+
+function getActiveEvents(key, ascend = true) {
+	let order = ascend ? 'ASC' : 'DESC';
+	const stmt = db.prepare(`SELECT * FROM events WHERE state = 'active' ORDER BY ${key} ${order}`);
+	const rows = stmt.all();
+	return rows;    
+}
+
+function getAllEvents(key, ascend = true) {
+	let order = ascend ? 'ASC' : 'DESC';
+	const stmt = db.prepare(`SELECT * FROM events ORDER BY ${key} ${order}`);
+	const rows = stmt.all();
+	return rows;    
+}
+
+function setEventState(id, newState) {
+	const stmt = db.prepare("UPDATE events SET state = ? WHERE id = ?");
+	const result = stmt.run(newState, id);
+}
+
+// function addPendingPayment(creator, invoice) {
+// 	const stmt = db.prepare("INSERT INTO pending_payments VALUES (@creator, @invoice, @created)");
+// 	const result = stmt.run(creator, invoice, Date.now());
+// }
+
+function addPendingPayment(creator,invoiceID,request) {
+    // console.log("addPendingPayment: " + creator + " : " + invoiceID);
+
+	var retobj = {
+		"status": "error"
+	};
+
+	if (true) {
+
+		var insertstr  = "INSERT INTO pending_payments(";
+		insertstr += 'creator, ';
+		insertstr += 'invoice, ';
+		insertstr += 'request ';
+			insertstr += ') VALUES (';
+			insertstr += '?,';
+			insertstr += '?,';
+			insertstr += '?)';
+	
+		// console.log("insertstr: " + insertstr);
+	
+		const stmt = db.prepare(insertstr);
+	
+		stmt.run(creator,invoiceID,request);
+
+		retobj = 
+		{
+			"status": "added",
+            "creator": creator,
+            "invoiceid": invoiceID
+		};
+
+	}
+
+    //db.close();
+	return retobj;
+
+}
+
+
+// function delPendingPayments(invoice) {
+// 	const stmt = db.prepare("DELETE FROM pending_payments WHERE invoice = ?");
+// 	const result = stmt.run(invoice);
+// }
+
+function delPendingPayments(creator) {
+    // console.log("delPendingPayments: " + creator);
+
+	var retobj = {
+		"status": "error"
+	};
+
+	if (true) {
+
+		var deletestr  = "DELETE FROM pending_payments WHERE 'creator' = '" + creator + "'";
+	
+		// console.log("deletestr: " + deletestr);
+	
+		const stmt = db.prepare(deletestr);    // preparer doesn't append a WHERE tenant clause
+	
+		stmt.run();
+
+		retobj = 
+		{
+			"status": "deleted",
+            "creator": creator
+		};
+
+	}
+
+    //db.close();
+	return retobj;
+
+}
+
+function delPendingPaymentID(invoiceID) {
+    // console.log("delPendingPaymentID: " + invoiceID);
+
+	var retobj = {
+		"status": "error"
+	};
+
+	if (true) {
+
+		var deletestr  = "DELETE FROM pending_payments WHERE invoice = '" + invoiceID + "'";
+	
+		// console.log("deletestr: " + deletestr);
+	
+		const stmt = db.prepare(deletestr);    // preparer doesn't append a WHERE tenant clause
+	
+		stmt.run();
+
+		retobj = 
+		{
+			"status": "deleted",
+            "invoiceid": invoiceID
+		};
+
+	}
+
+    //db.close();
+	return retobj;
+
+}
+
+function getPendingPayments(creator) {
+	const stmt = db.prepare("SELECT * FROM pending_payments WHERE creator = ?");
+	const rows = stmt.all(creator);
+	return rows;
+}
+
+function isPaymentPending(creator,invoiceID) {
+    // console.log("isPaymentPending: " + creator + " : " + invoiceID);
+
+    const rows = db.prepare(`SELECT creator,invoice FROM pending_payments`).all();
+
+	var found = false;
+
+	rows.forEach(row => {
+		// console.log("row: " + row);
+		if ((row.creator == creator) && (row.invoice == invoiceID)) {
+            // console.log("found still pending...");
+			found = true;
+		}
+	});
+
+    //db.close();
+
+	return found;
+
+}
+
+function anyPaymentsPending(creator) {
+    // console.log("anyPaymentsPending: " + creator + " : " + invoiceID);
+
+    const rows = db.prepare(`SELECT creator,invoice FROM pending_payments`).all();
+
+	var found = false;
+
+	rows.forEach(row => {
+		// console.log("row: " + row);
+		if ((row.creator == creator)) {
+            // console.log("found still pending...");
+			found = true;
+		}
+	});
+
+    //db.close();
+
+	return found;
+
 }

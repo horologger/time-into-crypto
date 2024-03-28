@@ -369,11 +369,25 @@
                     newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0d0d0' >Creator Paused</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
                 }
                 inProcessSlotID = slot.id;
+            } else if (slot.state == "paused_pending_payment") {
+                if (hpk != nostrPubKey) {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; color: black; background-color: #d0d0d0' disabled>Paused Pending Payment</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8);  // Maybe a countdown timer to the start of the slot
+                } else {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0d0d0' >Paused Pending Payment</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
+                }
+                inProcessSlotID = slot.id;
             } else if (slot.state == "completed") {
                 if (hpk != nostrPubKey) {
                     newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; color: black; background-color: #d0d0d0' disabled>Completed</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8);  // Maybe a countdown timer to the start of the slot
                 } else {
                     newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0d0d0' >Completed</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
+                }
+                document.getElementById("session-message").innerHTML = "Session Completed";
+            } else if (slot.state == "expired") {
+                if (hpk != nostrPubKey) {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; color: black; background-color: #d0d0d0' disabled>Expired</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8);  // Maybe a countdown timer to the start of the slot
+                } else {
+                    newCell.innerHTML = "<button onclick='delTSrow(" + '"' + slot.id + '"' + ")'  style='visibility: block; background-color: #d0d0d0' >Expired</button> slot.id: " + slot.id + " slot.state: " + slot.state + " by " + (slot.creator).substring(0,8) + " for " + (slot.reservor).substring(0,8);
                 }
                 document.getElementById("session-message").innerHTML = "Session Completed";
             } else {
@@ -562,7 +576,7 @@
                     getTimeSlots(hpk);
                 } else if (json.type == "completed"){
                     log("completed: ");
-                    document.getElementById("session-message").innerHTML = "Session had ended";
+                    document.getElementById("session-message").innerHTML = "Session has ended";
                     document.getElementById("session-controls").style.display = "none";
                     document.getElementById("session-progress").style.width = json.durperc + "%";
                     document.getElementById("session-progress").style.backgroundColor = "#e6e6e6";   // gray
@@ -579,7 +593,7 @@
                     getTimeSlots(hpk);
                 } else if (json.type == "ended"){
                     // yoda: "Ended, the session is."
-                    document.getElementById("session-message").innerHTML = "Session had ended";
+                    document.getElementById("session-message").innerHTML = "Session has ended";
                     document.getElementById("session-controls").style.display = "none";
                     document.getElementById("session-progress").style.width = json.durperc + "%";
                     document.getElementById("session-progress").style.backgroundColor = "#e6e6e6";   // gray
@@ -588,16 +602,37 @@
                     sessionEnded();
                 } else if (json.type == "create-invoice"){
                     document.getElementById("invoice").innerHTML = JSON.stringify(json);
-                    makeInvoice(json.amtInSats).then((invoice) => {
-                        log("Invoice Sent!");
-                        connection.send(JSON.stringify({action: "receive-invoice", creator: json.creator, reservor: json.reservor, invoice: invoice }));
-                    }).catch((error) => {
-                        log("Invoice Error: " + error);
-                    });
+                    // makeInvoice(json.amtInSats).then((invoice) => {
+                    //     log("Invoice Sent!");
+                    //     connection.send(JSON.stringify({action: "receive-invoice", creator: json.creator, reservor: json.reservor, invoice: invoice }));
+                    // }).catch((error) => {
+                    //     log("Invoice Error: " + error);
+                    // });
                     // connection.send(JSON.stringify({action: "receive-invoice", creator: json.creator, reservor: json.reservor, invoice: { amount: json.amtInSats } }));
                 } else if (json.type == "pay-invoice"){
                     document.getElementById("invoice").innerHTML = JSON.stringify(json);
-                    connection.send(JSON.stringify({action: "pay-receipt", creator: json.creator, reservor: json.reservor, receipt: "some receipt" }));
+
+                    if (json.invoice) { 
+                        window.webln.sendPayment(json.invoice).then((response) => {
+                            log("Invoice Paid!");
+                            connection.send(JSON.stringify({action: "pay-receipt", creator: json.creator, reservor: json.reservor, slotID: json.slotID, response: response }));
+                        }).catch((error) => {
+                            log("Invoice Error: " + error);
+                            connection.send(JSON.stringify({action: "user-rejected", creator: json.creator, reservor: json.reservor, slotID: json.slotID, response: "User rejected" }));
+                        });
+                    } else {
+                        log("Error sending payment: no invoice request");
+                    }
+                    // connection.send(JSON.stringify({action: "pay-receipt", creator: json.creator, reservor: json.reservor, receipt: "some receipt" }));
+                } else if (json.type == "rejected"){
+                    // yoda: "Rejected, the payment is."
+                    document.getElementById("session-message").innerHTML = "Payment Rejected...";
+                    // document.getElementById("session-controls").style.display = "none";
+                    // document.getElementById("session-progress").style.width = json.durperc + "%";
+                    // document.getElementById("session-progress").style.backgroundColor = "#e6e6e6";   // gray
+                    // document.getElementById("invoice-countdown").style.backgroundColor = "#e6e6e6";   // gray
+                    getTimeSlots(hpk);
+                    // sessionEnded();
                 } else {
                     log(event.data);
                 }
