@@ -138,6 +138,7 @@
         // if (((typeof window.webln) == "object") && ((typeof window.webln.enabled) == "boolean")) {
         if (typeof window.webln !== 'undefined') {
             document.getElementById("prereqs").style.display = "none";
+            document.getElementById("slotsboard").style.display = "none";
             document.getElementById("mainsection").style.display = "block";
             log("WebLN found");
             (async function() {
@@ -200,24 +201,7 @@
         }
         log("relay: " + relay);
 
-        // if (loc_href.search("hpk") > 0) {
-        //     var sched_link = loc_http + "?hpk=" + nostrPubKey;
-        //     document.getElementById("schedule-link").href = sched_link;
-        //     document.getElementById("schedule-link").innerHTML = "My Schedule Link: " + sched_link;
-        //     if (hpk != nostrPubKey) {
-        //         document.getElementById("mode-button").innerHTML = "Mode: Guest";
-        //     } else {
-        //         document.getElementById("mode-button").innerHTML = "Mode: Host";
-        //     }
-        // }
-        // else {
-        //     loc_http = loc_href.split("?")[0];
-        //     log("loc_http: " + loc_http);
-        //     var sched_link = loc_http + "?hpk=" + nostrPubKey;
-        //     document.getElementById("schedule-link").href = sched_link;
-        //     document.getElementById("schedule-link").innerHTML = "My Schedule Link: " + sched_link;
-        //     document.getElementById("mode-button").innerHTML = "Mode: Host";
-        // }
+        // document.getElementById("slotsboard-title").innerHTML = loc_host;
     }
 
     getHrefParts();
@@ -228,14 +212,20 @@
             document.getElementById("schedule-link").href = sched_link;
             document.getElementById("schedule-link").innerHTML = "My Schedule Link: " + sched_link;
             if (hpk != nostrPubKey) {
-                document.getElementById("mode-button").innerHTML = "Reserve TimeSlots";
+                document.getElementById("mode-button").innerHTML = "Create TimeSlots";
                 // document.getElementById("row00").style.visibility = 'hidden';    // Make Add TimeSlot row hidden
                 document.getElementById("row00").style.display = "none"; 
             } else {
-                document.getElementById("mode-button").innerHTML = "Create TimeSlots";
+                document.getElementById("mode-button").innerHTML = "Reserve TimeSlots";
                 // document.getElementById("row00").style.visibility = 'visible';    // Make Add TimeSlot row visible
                 // document.getElementById("row00").style.display = "block"; 
             }
+    }
+
+    function getScheduleLink(creator) {
+        log("getScheduleLink");
+        var sched_link = loc_http + "/?hpk=" + creator + "&relay=" + relay;
+        return(sched_link);
     }
 
     function getTimeSlots(hpk) {
@@ -243,11 +233,24 @@
         connection.send(JSON.stringify({action: "getTimeSlots", hpk: hpk}));
     }
 
+    function getBoardSlots() {
+        log("getBoardSlots");
+        connection.send(JSON.stringify({action: "getBoardSlots"}));
+    }
+
     function clearTimeSlots() {
         log("clearTimeSlots");
         var tstable = document.getElementById("time-slots-table");
         while (tstable.rows.length > 2) {   // Save the first row as the input row for new entries
             tstable.deleteRow(-1);
+        }
+    }
+
+    function clearBoardSlots() {
+        log("clearBoardSlots");
+        var bstable = document.getElementById("slotsboard-table");
+        while (bstable.rows.length > 1) {  
+            bstable.deleteRow(-1);
         }
     }
 
@@ -396,15 +399,112 @@
         });
     }
 
+    function redrawBoardSlots(slots) {
+        log("redrawBoardSlots");
+        clearBoardSlots();
+
+                // recalcUSD("recalc");
+        var bstable = document.getElementById("slotsboard-table");
+        var ridx = 0;
+        var newRow = {};
+        var newCell = {};
+        if (slots.length == 0) {
+            newRow = bstable.insertRow(-1);
+            newCell = newRow.insertCell(ridx++);
+            newCell.colSpan = 17;
+            newCell.innerHTML = "No TimeSlots Created yet.";
+        }
+        slots.forEach(function(slot) {
+            if (slot.state == "created") {
+
+                log("slot: " + JSON.stringify(slot, null, 2));
+                ridx = 0;
+                var sDate = new Date(parseInt(slot.start) * 1000);
+                var ts_year = sDate.getFullYear();
+                var ts_month = sDate.getMonth() + 1;
+                if (ts_month < 10) { ts_month = "0" + ts_month; }
+                var ts_day = sDate.getDate();
+                if (ts_day < 10) { ts_day = "0" + ts_day; }
+                var ts_hour = sDate.getHours();
+                if (ts_hour < 10) { ts_hour = "0" + ts_hour; }
+                var ts_minute = sDate.getMinutes();
+                if (ts_minute < 10) { ts_minute = "0" + ts_minute; }
+                var sDuration = Math.round(parseInt(slot.duration) / 60);
+
+                const confDateTime = ts_year + "-" + ts_month + "-" + ts_day + " " + ts_hour + ":" + ts_minute;
+
+                // Need satsmin and usd for checking if the price is still acceptable
+
+                var ts_satsmin = parseInt(slot.satsmin);
+                var ts_quote = parseFloat(slot.quote);
+                var ts_currency = "";   // USD, EUR, GBP, etc.
+
+                newRow = bstable.insertRow(-1);
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='4' disabled value='" + ts_year + "'/>";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "-";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_month + "'/>";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "-";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_day + "'/>";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "&nbsp;";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_hour + "'/>";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = ":";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='2' disabled value='" + ts_minute + "'/>";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "&nbsp;";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='4' style='text-align: right;' disabled value='" + sDuration + "'/>";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "&nbsp;";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='6' style='text-align: right;' disabled value='" + ts_satsmin + "'/>";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "&nbsp;";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "<input type='text' size='7' style='text-align: right;' disabled value='" + ts_quote + "'/>";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = "&nbsp;";
+                newCell = newRow.insertCell(ridx++);
+                newCell.innerHTML = '<a href="' + getScheduleLink(slot.creator) + '" style="color: white">' + shortenString(slot.creator) + ' Schedule</a>';
+            } else {
+                console.log("Unhandled slot state: " + slot.state + " for slot.id: " + slot.id);
+            }
+        });
+    }
+
+    function shortenString(str) {
+        if (str.length <= 12) {
+        return str;
+        }
+    
+        const first = str.substring(0, 6);
+        const last = str.substring(str.length - 3);
+    
+        const dots = '.'.repeat(3);
+    
+        return `${first}${dots}${last}`;
+    }
+
+
     function addTimeSlot(hpk, start, duration, satsmin, quote) {
         log("addTimeSlot: " + hpk);
         connection.send(JSON.stringify({action: "addTimeSlot", hpk: hpk, start: start, duration: duration, satsmin: satsmin, quote: quote}));
+        getBoardSlots();
     }
 
     function delTimeSlot(deletor_hpk, slotID) {
         log("delTimeSlot: " + deletor_hpk + " slotID: " + slotID);
         connection.send(JSON.stringify({action: "delTimeSlot", hpk: deletor_hpk, slotID: slotID}));
         getTimeSlots(hpk);
+        getBoardSlots();
     }
 
     function resTimeSlot(reservor_hpk, slotID) {
@@ -492,8 +592,21 @@
         connection.send(JSON.stringify({action: "end", hpk: hpk, ender: nostrPubKey, slotID: inProcessSlotID}));
     }   
 
-    function switchMode() {
-        log("switchMode");
+    function relocateHome() {
+        log("relocateHome");
+        window.location.href = loc_http;
+    }
+
+    function toggleBoard() {
+        log("toggleBoard");
+        const bt = document.getElementById("board-toggle");
+        if (bt.innerHTML == "vvv") {
+            bt.innerHTML = "^^^";
+            document.getElementById("slotsboard").style.display = "block";
+        } else {
+            bt.innerHTML = "vvv";
+            document.getElementById("slotsboard").style.display = "none";
+        }
     }
 
     var connection = null;
@@ -514,6 +627,7 @@
             document.getElementById("conn-status").style.backgroundColor = "#32d40d";   // green
             setTSdefaults();
             getTimeSlots(hpk);
+            getBoardSlots();
         };
 
         connection.onclose = () => {
@@ -551,6 +665,10 @@
                     recalcUSD("recalc");
                 } else if (json.type == "timeslots"){
                     redrawTimeSlots(json.slots);
+                } else if (json.type == "boardslots"){
+                    console.log("boardslots: " + JSON.stringify(json.slots, null, 2));
+                    redrawBoardSlots(json.slots);
+                    document.getElementById("slotsboard-title").innerHTML = loc_host;
                 } else if (json.type == "pending-session"){
                     log("pending-session: in " + json.insecs);
                     document.getElementById("session-message").innerHTML = "Session starting in " + json.insecs + " seconds";
@@ -723,6 +841,30 @@
     <!-- <div id="conn-status" style="background-color: #d40d1e; position: fixed; top: 0; left: 0; width: 100%; height: 4px;"></div> -->
     <!-- <div id="conn-status" style="background-color: #eae30c; position: fixed; top: 0; left: 0; width: 100%; height: 4px;"></div> -->
     <div id="conn-status" style="background-color: #e6e6e6; position: fixed; top: 0; left: 0; width: 100%; height: 4px;"></div>
+    <div id="slotsboard" style="display: block; width: 800px; margin: 0 auto; background: #000; color: #fff;" >
+        <center>
+        <p>&nbsp</p>
+        <h4 id="slotsboard-title">time-into-crypto</h4>
+        <h3>Consulting Timeslots Available</h3>
+        <p>
+            These are the currently available timeslots. <br />
+        </p>
+        <table id="slotsboard-table" border="0" cellspacing="0" cellpadding="0">
+            <tr id="rowsbtr" style="font-family: monospace; font-size: smaller;" >
+                <th align="center">Year</th><th align="center">-</th>
+                <th align="center">Mon</th><th align="center">-</th>
+                <th align="center">Day</th><th align="center">&nbsp;</th>
+                <th align="center">Hour</th><th align="center">:</th>
+                <th align="center">Min</th><th align="center">&nbsp;</th>
+                <th align="center">Dur</th><th align="center">&nbsp;</th>
+                <th align="center">Sats/Min</th><th align="center">&nbsp;</th>
+                <th align="center">USD</th><th align="center">&nbsp;</th>
+                <th align="left">Link</th>
+            </tr>
+        </table>
+        <p>&nbsp</p>
+        </center>
+    </div>
     <div id="prereqs">
         <h3>Prerequisites</h3>
         <p>
@@ -746,7 +888,7 @@
     <!-- <textarea rows="1" cols="80" id="nick"></textarea> -->
     <table border="0" cellspacing="1" cellpadding="0">
         <!-- <tr><th align="right">Name</th><th>Description</th></tr> -->
-        <tr><td align="right">Nick:</td><td><input type="text" id="nick" size="14" style="font-family: monospace" onInput="showCurrentValue(event)" /></td></tr>
+        <tr><td align="right"><button id="board-toggle" onclick="toggleBoard()">vvv</button>&nbsp;&nbsp;Nick:</td><td><input type="text" id="nick" size="14" style="font-family: monospace" onInput="showCurrentValue(event)" /></td></tr>
         <tr><td align="right">LNPubKey:</td><td><input type="text" id="lnpubkey-field" size="66" style="font-family: monospace" /></td></tr>
         <tr><td align="right">NostrPubKey:</td><td><input type="text" id="nostrpubkey-field" size="66" style="font-family: monospace" /></td></tr>
     </table>
@@ -764,7 +906,7 @@
     <script>
             function addTSrow() {
                 recalcUSD("recalc");
-                var tstable = document.getElementById("time-slots-table");
+                var bstable = document.getElementById("time-slots-table");
                 var ts_year = parseInt((document.getElementById("ts-year")).value);
                 var ts_month = parseInt((document.getElementById("ts-month")).value);
                 var ts_day = parseInt((document.getElementById("ts-day")).value);
@@ -982,7 +1124,7 @@
 
     <br />
 
-    <button id="mode-button" onclick="switchMode()">Mode: Unknown</button> <a id="schedule-link" href="http://localhost:8080/?hpk=unknown&relay=wss%3A%2F%2Frelay.primal.net">Schedule Link: http://localhost:8080/?hpk=unknown&relay=wss://relay.primal.net</a>
+    <button id="mode-button" onclick="relocateHome()">Mode: Unknown</button> <a id="schedule-link" href="http://localhost:8080/?hpk=unknown&relay=wss%3A%2F%2Frelay.primal.net">Schedule Link: http://localhost:8080/?hpk=unknown&relay=wss://relay.primal.net</a>
 
     <ul id="chat"></ul>
 
@@ -1233,6 +1375,8 @@
             const timenow = Math.round((new Date()).getTime() / 1000);
             document.getElementById("demo").innerHTML = timenow;
         };
+
+        
     </script>
     
 

@@ -19,6 +19,7 @@ module.exports = {
 	cnfTimeSlot: cnfTimeSlot,
 	dumpTimeSlots: dumpTimeSlots,
 	getAllTimeSlots: getAllTimeSlots,
+	getAllBoardSlots: getAllBoardSlots,
 	updateExpiredTimeSlots: updateExpiredTimeSlots,
 	getAllTimeSlots4Period: getAllTimeSlots4Period,
 	getInProgressTimeSlots4Period: getInProgressTimeSlots4Period,
@@ -584,6 +585,13 @@ function getAllTimeSlots(key, ascend = true) {
 	const rows = stmt.all();
 	return rows;    
 }
+
+function getAllBoardSlots() {
+	const stmt = db.prepare(`SELECT * FROM timeslots ORDER BY creator, start ASC`);
+	const rows = stmt.all();
+	return rows;    
+}
+
 
 function updateExpiredTimeSlots(timeNow, graceSecs = 0) {
 	const stmt = db.prepare(`SELECT * FROM timeslots`);

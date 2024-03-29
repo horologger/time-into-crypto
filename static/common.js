@@ -19,3 +19,4 @@ function log(message)
     loggdiv.innerHTML = loggdiv.innerHTML + "\n" + message;
     loggdiv.scrollTop = loggdiv.scrollHeight;
 }
+

@@ -56,21 +56,89 @@ const {authenticatedLndGrpc} = require('ln-service');
 // # export DATABASE_URI="/data/time-into-crypto.db" #a postgres connection string or sqlite filename. Default='blah' #nostr-wallet-connect.db (sqlite)
 // # export PORT=8080 #the port on which the app should listen on (default='blah' #8080)
 
+// Start9
+// LNCLI_MACAROONPATH=/mnt/lnd/admin.macaroon
+// LNCLI_RPCSERVER=lnd.embassy:10009
+// LNCLI_TLSCERTPATH=/mnt/lnd/tls.cert
+
+// Umbrel
+// LNCLI_RPCSERVER: $APP_LIGHTNING_NODE_IP:$APP_LIGHTNING_NODE_GRPC_PORT
+// LNCLI_TLSCERTPATH: "/lnd/tls.cert"
+// LNCLI_MACAROONPATH: "/lnd/data/chain/bitcoin/mainnet/admin.macaroon"
+
+const fs = require('fs');
 
 var nwc_relay = process.env[`RELAY`]; 
-var cert = process.env[`LND_CERT_FILE`];       
-var macaroon = process.env[`LND_MACAROON_FILE`];
-var socket = process.env[`LND_ADDRESS`];
+
+var cert = process.env[`LNCLI_TLSCERT`];
+
+// Testing on Ragnar
+// export LNCLI_TLSCERTPATH=./lnd-data/tls.cert
+
+if (typeof cert == "undefined") {
+    console.log("LNCLI_TLSCERT not found.  Trying LNCLI_TLSCERTPATH")
+    const certpath = process.env[`LNCLI_TLSCERTPATH`];
+    if (typeof certpath == "undefined") {
+        console.log("No LND Certificate found.  Export LNCLI_TLSCERT or LNCLI_TLSCERTPATH or use .bos/credentials.json");
+        process.exit(1);
+    } else if (typeof certpath == "string") {
+        console.log("LNCLI_TLSCERTPATH: " + certpath);
+        if (checkFileExists(certpath)) {
+            const rawcert = fs.readFileSync(certpath);
+            // console.log("rawcert: " + rawcert);
+            const b64cert = Buffer.from(rawcert).toString('base64');
+            // console.log("b64cert: " + shortenString(b64cert));
+            // console.log("b64cert: " + b64cert);
+            cert = b64cert;
+        } else {
+            console.log("No LND Certificate found.  Export LNCLI_TLSCERT or LNCLI_TLSCERTPATH or use .bos/credentials.json");
+            process.exit(1);
+        }        
+    } else {    
+        console.log("No LND Certificate found.  Export LNCLI_TLSCERT or LNCLI_TLSCERTPATH or use .bos/credentials.json");
+        process.exit(1);
+    }
+}
+
+var macaroon = process.env[`LNCLI_MACAROON`];
+
+// Testing on Ragnar
+// export LNCLI_MACAROONPATH=./lnd-data/data/chain/bitcoin/mainnet/admin.macaroon
+
+if (typeof macaroon == "undefined") {
+    console.log("LNCLI_MACAROON not found.  Trying LNCLI_MACAROONPATH")
+    const macaroonpath = process.env[`LNCLI_MACAROONPATH`];
+    if (typeof macaroonpath == "undefined") {
+        console.log("No LND Certificate found.  Export LNCLI_MACAROON or LNCLI_MACAROONPATH or use .bos/credentials.json");
+        process.exit(1);
+    } else if (typeof macaroonpath == "string") {
+        console.log("LNCLI_MACAROONPATH: " + macaroonpath);
+        if (checkFileExists(macaroonpath)) {
+            const rawmacaroon = fs.readFileSync(macaroonpath);
+            // console.log("rawmacaroon: " + rawmacaroon);
+            const b64macaroon = Buffer.from(rawmacaroon).toString('base64');
+            // console.log("b64macaroon: " + shortenString(b64macaroon));
+            // console.log("b64macaroon: " + b64macaroon);
+            macaroon = b64macaroon;
+        } else {
+            console.log("No LND Certificate found.  Export LNCLI_MACAROON or LNCLI_MACAROONPATH or use .bos/credentials.json");
+            process.exit(1);
+        }        
+    } else {    
+        console.log("No LND Certificate found.  Export LNCLI_MACAROON or LNCLI_MACAROONPATH or use .bos/credentials.json");
+        process.exit(1);
+    }
+}
+
+var socket = process.env[`LNCLI_RPCSERVER`];
 
 console.log("nwc_relay: " + nwc_relay);
-console.log("cert: " + cert);
-console.log("macaroon: " + macaroon);
+console.log("cert: " + shortenString(cert));
+console.log("macaroon: " + shortenString(macaroon));
 console.log("socket: " + socket);
 
 const homedir = process.env[`HOME`];
 var bosnode = process.env[`BOS_DEFAULT_SAVED_NODE`];
-
-const fs = require('fs');
 
 function readFileIntoJSONObject(filename) {
     try {
@@ -110,6 +178,7 @@ var boscreds = {};
 // Example usage
 var filename = homedir + '/.bos/config.json';
 if (checkFileExists(filename)) {
+    console.log(".bos/config.json exists is used to find which node to connect to.");
     bosconfig = readFileIntoJSONObject(filename);
     if ((typeof bosconfig == "object") && (typeof bosconfig.default_saved_node == "string")) {
         bosnode = bosconfig.default_saved_node;
@@ -120,6 +189,7 @@ console.log("bosnode: " + bosnode);
 
 filename = homedir + '/.bos/' + bosnode + '/credentials.json';
 if (checkFileExists(filename)) {
+    console.log(filename + " exists and overrides ENVIRONMENT variables");
     boscreds = readFileIntoJSONObject(filename);
     if (typeof boscreds == "object") {
         console.log("reading boscreds: ");
@@ -135,12 +205,14 @@ if (checkFileExists(filename)) {
     }
 } else {
     console.log("Getting LND details from ENV");
+    // If 
 }
 
 //const {exit} = require('process');
 
 var attempt_to_connect_to_lnd_on_startup = true;
 if (attempt_to_connect_to_lnd_on_startup) {
+
 
     if (cert && macaroon && socket) {
         console.log("cert: " + shortenString(cert));
@@ -193,9 +265,16 @@ if (attempt_to_connect_to_lnd_on_startup) {
 
 
     console.log('Getting node info...');
-    ln.getNodeInfo();
+    ln.getNodeInfo().then((nodeInfo) => {
+        nodeInfo.features = []; // Don't need this
+        console.log(`nodeInfo: ${JSON.stringify(nodeInfo, null, 2)}`);
+        // exit(0);
+    }).catch((err) => { 
+        console.log(`Error getting node info: ${err.message}`);
+    });
 
-    ln.subToInvoices();
+
+    ln.subToInvoices(); // Not working yet
 }
 
 console.log("Reconnect any websocket browser windows...");
@@ -523,10 +602,10 @@ wsServer.on('connection', (socket, req) => {
             } else {
                 console.log("No established connection for " + msg.hpk);
             }
-        // } else if (msg.action == "publishTimeSlots") {
-        //     console.log('Unhandled Action' + msg.action);
-        // } else if (msg.action == "reserveTimeSlot") {
-        //     console.log('Unhandled Action' + msg.action);
+        } else if (msg.action == "getBoardSlots") {
+            console.log('getBoardSlots for all');
+            const boardTimeSlots = db.getAllBoardSlots();
+            broadcast(JSON.stringify({ type: "boardslots", slots: boardTimeSlots}));
         } else if (msg.action == "pause") {
             console.log('doPause Action ' + msg.action + " on " + msg.slotID + " by " + msg.pauser);
             notify_listeners(msg.hpk, JSON.stringify({ type: "paused", pauser: msg.pauser, slotID: msg.slotID}));
@@ -759,12 +838,12 @@ function broadcast(data) {
     wsServer.clients.forEach(client => {
         // console.log("client: " + JSON.stringify(client, null, 2));
         console.log("client: " + idx + " " + client.payee + " " + client.payor);
-        if (client.payee != 'unknown') {
+        // if (client.payee != 'unknown') { // Even unknowns get the message
             if (client.readyState === ws.OPEN) {
                 client.send(data);
             }
             bidx++;
-        }
+        // }
         idx++;
     });
     console.log('broadcasted...to...'+(bidx-1));
