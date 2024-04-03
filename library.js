@@ -40,7 +40,12 @@ module.exports = {
 	delPendingPaymentID: delPendingPaymentID,
 	getPendingPayments: getPendingPayments,
 	isPaymentPending: isPaymentPending,
-	anyPaymentsPending: anyPaymentsPending
+	anyPaymentsPending: anyPaymentsPending,
+	createUser: createUser,
+	getUser: getUser,
+	getUsers: getUsers,
+	updateUser: updateUser,
+	deleteUser: deleteUser
 };
 
 const Database = require("better-sqlite3");
@@ -176,6 +181,21 @@ function init() {
     info = stmt.run();
     // console.log(info.changes);
 	
+	createstr  = 'CREATE TABLE IF NOT EXISTS users (';
+	createstr += 'user CHAR(36) NOT NULL, ';	// "1234567890123456789012345678901234567890123456789012345678901234"
+	createstr += 'currency CHAR(3) NOT NULL, ';	// "USD"
+	createstr += 'relay TEXT NOT NULL, ';	// wss://relay.primal.net
+	createstr += 'hostport TEXT, ';	// localhost:8080
+	createstr += 'base64cert TEXT, ';	// LS0tLS1C...
+	createstr += 'base64macaroon TEXT, ';	// AgEDbG5k...
+	createstr += 'created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,';
+	createstr += 'modified DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL';
+	createstr += ')';
+
+    stmt = db.prepare(createstr);
+    info = stmt.run();
+    // console.log(info.changes);
+	
     //db.close();
 }
 
@@ -192,6 +212,10 @@ function drop() {
     // console.log(info.changes);
 
     stmt = db.prepare('DROP TABLE IF EXISTS pending_payments');
+    info = stmt.run();
+    // console.log(info.changes);
+
+    stmt = db.prepare('DROP TABLE IF EXISTS users');
     info = stmt.run();
     // console.log(info.changes);
 
@@ -882,4 +906,35 @@ function anyPaymentsPending(creator) {
 
 	return found;
 
+}
+
+function createUser(user, currency, relay, hostport = null, base64cert = null, base64macaroon = null) {
+	const stmt = db.prepare('INSERT INTO users (user, currency, relay, hostport, base64cert, base64macaroon) VALUES (?, ?, ?, ?, ?, ?)');
+	const result = stmt.run(user, currency, relay, hostport, base64cert, base64macaroon);
+	return result.lastInsertRowid;
+}
+
+
+function getUsers() {
+	const stmt = db.prepare('SELECT * FROM users');
+	const result = stmt.get(user);
+	return result;
+}
+
+function getUser(user) {
+	const stmt = db.prepare('SELECT * FROM users WHERE user = ?');
+	const result = stmt.get(user);
+	return result;
+}
+
+function updateUser(user, currency, relay, hostport = null, base64cert = null, base64macaroon = null) {
+	const stmt = db.prepare('UPDATE users SET currency = ?, relay = ?, hostport = ?, base64cert = ?, base64macaroon = ?, modified = CURRENT_TIMESTAMP WHERE user = ?');
+	const result = stmt.run(currency, relay, hostport, base64cert, base64macaroon, user);
+	return result.changes;
+}
+
+function deleteUser(user) {
+	const stmt = db.prepare('DELETE FROM users WHERE user = ?');
+	const result = stmt.run(user);
+	return result.changes;
 }

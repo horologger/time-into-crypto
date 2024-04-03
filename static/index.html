@@ -173,7 +173,34 @@
     var hpk = "aaabbb";
     var relay = "wss://relay.primal.net"
 
+
     var inProcessSlotID = "unknown";
+
+    function getUserInfo(user) {
+        log("getUserInfo: " + user);
+        connection.send(JSON.stringify({action: "getUserInfo", user: user}));
+    }
+
+    function setUserInfo(userInfo) {
+        log("setUserInfo: " + JSON.stringify(userInfo, null, 2));
+        if (userInfo.relay != '') {
+            document.getElementById("relay-input").value = userInfo.relay;
+        } else {
+            document.getElementById("relay-input").value = "wss://relay.primal.net";
+        }
+        relay = document.getElementById("relay-input").value;
+        if (userInfo.currency != '') {
+            document.getElementById("currency-input").value = userInfo.currency;
+        } else {
+            document.getElementById("currency-input").value = "usd";
+        }
+        document.getElementById("board-currency-header").innerHTML = (document.getElementById("currency-input").value).toUpperCase();
+        document.getElementById("slots-currency-header").innerHTML = (document.getElementById("currency-input").value).toUpperCase();
+        document.getElementById("hostport-field").value = userInfo.hostport;
+        document.getElementById("base64cert-field").value = userInfo.base64cert;
+        document.getElementById("base64macaroon-field").value = userInfo.base64macaroon;
+        setScheduleLink();
+    }
 
     function getHrefParts() {
         log("getHrefParts");
@@ -208,6 +235,7 @@
 
     function setScheduleLink() {
         log("setScheduleLink");
+        document.getElementById("relay-input").value = relay;
         var sched_link = loc_http + "/?hpk=" + nostrPubKey + "&relay=" + relay;
             document.getElementById("schedule-link").href = sched_link;
             document.getElementById("schedule-link").innerHTML = "My Schedule Link: " + sched_link;
@@ -263,7 +291,7 @@
         log("redrawTimeSlots");
         clearTimeSlots();
 
-                // recalcUSD("recalc");
+                // recalcQuote("recalc");
         var tstable = document.getElementById("time-slots-table");
         var ridx = 0;
         var newRow = {};
@@ -403,7 +431,7 @@
         log("redrawBoardSlots");
         clearBoardSlots();
 
-                // recalcUSD("recalc");
+                // recalcQuote("recalc");
         var bstable = document.getElementById("slotsboard-table");
         var ridx = 0;
         var newRow = {};
@@ -609,6 +637,50 @@
         }
     }
 
+    function toggleConfig() {
+        log("toggleConfig");
+        const bt = document.getElementById("config-button");
+        if (bt.innerHTML == "Config") {
+            bt.innerHTML = "Save";
+            document.getElementById("config-settings").style.display = "block";
+            document.getElementById("relay-input").disabled = false;
+            document.getElementById("currency-input").disabled = false;
+        } else {    // Save Logic
+            bt.innerHTML = "Config";
+            document.getElementById("config-settings").style.display = "none";
+            document.getElementById("relay-input").disabled = true;
+            document.getElementById("currency-input").disabled = true;
+            relay = document.getElementById("relay-input").value;
+            const currency = document.getElementById("currency-input").value;
+            const hostport = document.getElementById("hostport-field").value;
+            const base64cert = document.getElementById("base64cert-field").value;
+            const base64macaroon = document.getElementById("base64macaroon-field").value;
+            const tosend = {
+                action: "update-user",
+                user: nostrPubKey,
+                relay: relay,
+                currency: currency
+            };
+            if (typeof hostport != "undefined") {
+                tosend.hostport = hostport;
+            }
+            if (typeof base64cert != "undefined") {
+                tosend.base64cert = base64cert;
+            }
+            if (typeof base64macaroon != "undefined") {
+                tosend.base64macaroon = base64macaroon;
+            }
+
+            connection.send(JSON.stringify(tosend));
+            setScheduleLink();
+        }
+    }
+
+    function deleteUser() {
+        log("deleteUser");
+        connection.send(JSON.stringify({action: "delete-user", user: hpk}));
+    }
+
     var connection = null;
 
     function reconnect() {
@@ -628,6 +700,8 @@
             setTSdefaults();
             getTimeSlots(hpk);
             getBoardSlots();
+            getUserInfo(hpk);
+            // setScheduleLink();
         };
 
         connection.onclose = () => {
@@ -662,7 +736,7 @@
                 } else if (json.type == "price"){
                     bitcoinPrice = parseInt(json.price);
                     document.getElementById("webln-div").innerHTML = bitcoinPrice;
-                    recalcUSD("recalc");
+                    recalcQuote("recalc");
                 } else if (json.type == "timeslots"){
                     redrawTimeSlots(json.slots);
                 } else if (json.type == "boardslots"){
@@ -672,6 +746,9 @@
                 } else if (json.type == "pending-session"){
                     log("pending-session: in " + json.insecs);
                     document.getElementById("session-message").innerHTML = "Session starting in " + json.insecs + " seconds";
+                } else if (json.type == "session-info"){
+                    log("session-info: " + json.infoMsg);
+                    document.getElementById("session-message").innerHTML = json.infoMsg;
                 } else if (json.type == "in-progress"){
                     log("in-progress: for " + json.forsecs);
                     document.getElementById("session-message").innerHTML = "Session in progress for " + json.forsecs + " seconds" + " " + json.nextInvoice + " " + json.secsremaining + " " + json.durperc + " " + json.invperc + " " + json.invsoon + " " + json.invnow;
@@ -751,6 +828,8 @@
                     // document.getElementById("invoice-countdown").style.backgroundColor = "#e6e6e6";   // gray
                     getTimeSlots(hpk);
                     // sessionEnded();
+                } else if (json.type == "userInfo"){
+                    setUserInfo(json.userInfo);
                 } else {
                     log(event.data);
                 }
@@ -858,7 +937,7 @@
                 <th align="center">Min</th><th align="center">&nbsp;</th>
                 <th align="center">Dur</th><th align="center">&nbsp;</th>
                 <th align="center">Sats/Min</th><th align="center">&nbsp;</th>
-                <th align="center">USD</th><th align="center">&nbsp;</th>
+                <th align="center" id="board-currency-header">Cur</th><th align="center">&nbsp;</th>
                 <th align="left">Link</th>
             </tr>
         </table>
@@ -872,6 +951,14 @@
             The <a href="https://getalby.com/" target="get_ext">Alby Browser Extension</a> is recommended. <br />
             Install an extension and reload this page. <br />
         </p>
+    </div>
+    <div id="config-settings" style="display: none;" >
+        <table border="0" cellspacing="1" cellpadding="1">
+            <!-- <tr><th align="right">Key</th><th>Value</th></tr> -->
+            <tr><td align="right">Host:Port</td><td colspan = "2"><input type="text" id="hostport-field" size="66" style="font-family: monospace" placeholder="hostname:port" /></td></tr>
+            <tr><td align="right">Base64 Cert</td><td colspan = "2"><input type="text" id="base64cert-field" size="66" style="font-family: monospace" placeholder="Base64 encoded RPC Certificate. (LS0...)"/></td></tr>
+            <tr><td align="right">Base64 Macaroon</td><td colspan = "2"><input type="text" id="base64macaroon-field" size="66" style="font-family: monospace" placeholder="Base64 encoded Macaroon with invoice privileges ONLY. (AgED...)" /></td></tr>
+        </table>
     </div>
 
     <div id="mainsection" style="display: none;" >
@@ -888,9 +975,15 @@
     <!-- <textarea rows="1" cols="80" id="nick"></textarea> -->
     <table border="0" cellspacing="1" cellpadding="0">
         <!-- <tr><th align="right">Name</th><th>Description</th></tr> -->
-        <tr><td align="right"><button id="board-toggle" onclick="toggleBoard()">vvv</button>&nbsp;&nbsp;Nick:</td><td><input type="text" id="nick" size="14" style="font-family: monospace" onInput="showCurrentValue(event)" /></td></tr>
-        <tr><td align="right">LNPubKey:</td><td><input type="text" id="lnpubkey-field" size="66" style="font-family: monospace" /></td></tr>
-        <tr><td align="right">NostrPubKey:</td><td><input type="text" id="nostrpubkey-field" size="66" style="font-family: monospace" /></td></tr>
+        <tr><td align="right"><button id="board-toggle" onclick="toggleBoard()">vvv</button>&nbsp;&nbsp;Nick:</td><td><input type="text" id="nick" size="14" style="font-family: monospace" /></td><td align="right"><button id="config-button" onclick="toggleConfig()">Config</button>
+            <select name="currency" id="currency-input" disabled>
+                <option value="usd">USD</option>
+                <option value="can">CAN</option>
+                <option value="eur">EUR</option>
+            </select>
+            <input type="text" id="relay-input" size="40" style="text-align: right;" style="font-family: monospace" disabled/></td></tr>
+        <tr><td align="right">LNPubKey:</td><td colspan = "2"><input type="text" id="lnpubkey-field" size="66" style="font-family: monospace" /></td></tr>
+        <tr><td align="right">NostrPubKey:</td><td colspan = "2"><input type="text" id="nostrpubkey-field" size="66" style="font-family: monospace" /></td></tr>
     </table>
     <!-- <input cols="80" id="nick"></input> -->
     <form id="chatform">
@@ -905,7 +998,7 @@
 
     <script>
             function addTSrow() {
-                recalcUSD("recalc");
+                recalcQuote("recalc");
                 var bstable = document.getElementById("time-slots-table");
                 var ts_year = parseInt((document.getElementById("ts-year")).value);
                 var ts_month = parseInt((document.getElementById("ts-month")).value);
@@ -953,17 +1046,17 @@
                 return true;
             }
 
-            function recalcUSD(event)
+            function recalcQuote(event)
             {  
                 const isNum = isNumberKey(event);
                 if (isNum || (event == "recalc")) {
                 
                     var ts_duration = parseInt((document.getElementById("ts-duration")).value);
                     var ts_satsmin = parseInt((document.getElementById("ts-satsmin")).value);
-                    var usdAmt = (((ts_duration * ts_satsmin) / 100000000) * bitcoinPrice).toFixed(2);
-                    // let usdAmtStr = "$" + usdAmt;
-                    document.getElementById("ts-usd").value = usdAmt;
-                    console.log("usdAmt: " + usdAmt);
+                    var quoteAmt = (((ts_duration * ts_satsmin) / 100000000) * bitcoinPrice).toFixed(2);
+                    // let quoteAmtStr = "$" + quoteAmt;
+                    document.getElementById("ts-usd").value = quoteAmt;
+                    console.log("quoteAmt: " + quoteAmt);
                 }
                 return isNum;
             }
@@ -1078,7 +1171,7 @@
         <th align="center">Min</th><th align="center">&nbsp;</th>
         <th align="center">Dur</th><th align="center">&nbsp;</th>
         <th align="center">Sats/Min</th><th align="center">&nbsp;</th>
-        <th align="center">USD</th><th align="center">&nbsp;</th>
+        <th align="center" id="slots-currency-header">Cur</th><th align="center">&nbsp;</th>
         <th align="left">Action</th>
     </tr>
     <tr id="row00" style="font-family: monospace, visibility="hidden">
@@ -1087,8 +1180,8 @@
         <td align="right"><input id="ts-day"      type="text" size="2" value="12"/></td><td align="center">&nbsp;</td>
         <td align="right"><input id="ts-hour"     type="text" size="2" value="13"/></td><td align="center">:</td>
         <td align="right"><input id="ts-minute"   type="text" size="2" value="00"/></td><td align="center">&nbsp;</td>
-        <td align="right"><input id="ts-duration" type="text" size="4" value="5" style="text-align: right;" onkeypress="return recalcUSD(event)" /></td><td align="center">&nbsp;</td>
-        <td align="right"><input id="ts-satsmin"  type="text" size="6" value="1000" style="text-align: right;" onkeypress="return recalcUSD(event)" /></td><td align="center">&nbsp;</td>
+        <td align="right"><input id="ts-duration" type="text" size="4" value="5" style="text-align: right;" onkeypress="return recalcQuote(event)" /></td><td align="center">&nbsp;</td>
+        <td align="right"><input id="ts-satsmin"  type="text" size="6" value="1000" style="text-align: right;" onkeypress="return recalcQuote(event)" /></td><td align="center">&nbsp;</td>
         <td align="center"><input id="ts-usd"     type="text" size="7" value="calc" disabled style="text-align: right;"/></td><td align="center">&nbsp;</td>
         <td align="left">
             <button id="test01" onclick="addTSrow()"  style="visibility: block">Add TimeSlot</button>
@@ -1114,13 +1207,13 @@
     <button id="disconnect" onclick="disconnect()">Disconnect</button>
     <button id="reconnect" onclick="reconnect()" style="visibility: hidden">Connect</button>
 
-    <button id="test01" onclick="doTestWS01()">Test 01 : DM</button>
-    <button id="test02" onclick="doTestWS02()">Test 02 : EV</button>
-    <!-- <button id="test02" onclick="testLN02()">Test 02 : GetInfo</button> -->
-    <button id="test03" onclick="testLN03()">Test 03 : MakeInvoice</button>
-    <button id="test04" onclick="testLN04()">Test 04 : SendPayment</button>
-    <button id="test05" onclick="testLN05()">Test 05 : SignMessage</button>
-    <button id="test06" onclick="testLN06()">Test 06 : VerifyMessage</button>
+    <button id="test01" onclick="doTestWS01()" style="visibility: hidden">Test 01 : DM</button>
+    <button id="test02" onclick="doTestWS02()" style="visibility: hidden">Test 02 : EV</button>
+    <!-- <button id="test02" onclick="testLN02()" style="visibility: hidden">Test 02 : GetInfo</button> -->
+    <button id="test03" onclick="testLN03()" style="visibility: hidden">Test 03 : MakeInvoice</button>
+    <button id="test04" onclick="testLN04()" style="visibility: hidden">Test 04 : SendPayment</button>
+    <button id="test05" onclick="testLN05()" style="visibility: hidden">Test 05 : SignMessage</button>
+    <button id="test06" onclick="testLN06()" style="visibility: hidden">Test 06 : VerifyMessage</button>
 
     <br />
 
@@ -1191,8 +1284,10 @@
             // Your code here
             log("NostrPubKey: " + nostrPubKey);
             document.getElementById("nostrpubkey-field").value = nostrPubKey;
+            // getUserInfo(nostrPubKey);
             getHrefParts();
             setScheduleLink();
+            
             if ((typeof npk) != "undefined") {
                 if (npk != nostrPubKey) {
                     npk = nostrPubKey;
@@ -1215,6 +1310,8 @@
 
             getTimeSlots(hpk);
 
+            getUserInfo(nostrPubKey);
+            setScheduleLink();
 
             disconnect();
             reconnect();
@@ -1231,6 +1328,7 @@
             })();
             getHrefParts();
             setScheduleLink();
+            // getUserInfo(nostrPubKey);
             // getHrefParts();
             // getTimeSlots(nostrPubKey);   // This will get triggered upon reconnect after account change
 
