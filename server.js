@@ -582,7 +582,7 @@ wsServer.on('connection', (socket, req) => {
 
         } else if (msg.action == "addTimeSlot") {
             console.log('addTimeSlot for ' + msg.hpk + " " + msg.start + " " + msg.duration + " " + msg.satsmin + " " + msg.quote);
-            const addedID = db.addTimeSlot({  "label": "add", "creator": msg.hpk, "reservor": "unknown", "start": msg.start, "pause": 0, "duration":  (msg.duration * 60), "satsmin": msg.satsmin, "quote": msg.quote, "currency": "usd", "state": "created"});
+            const addedID = db.addTimeSlot({  "label": "add", "creator": msg.hpk, "reservor": "unknown", "start": msg.start, "pause": 0, "duration":  (msg.duration * 60), "satsmin": msg.satsmin, "quote": msg.quote, "currency": msg.currency, "state": "created"});
             console.log('addedID: ' + addedID);
         } else if (msg.action == "delTimeSlot") {
             console.log('delTimeSlot for ' + msg.hpk + " " + msg.slotID);
@@ -687,6 +687,23 @@ wsServer.on('connection', (socket, req) => {
             } else {
                 console.log('Unknown User: ' + msg.user);
             }
+        } else if (msg.action == "get-crypto-price") {
+            console.log('get-crypto-price: ' + JSON.stringify(msg,null,2));
+            var price = 100000;
+            getPrice(msg.crypto, msg.currency).then((retval) => {
+                if (typeof retval.data == "object" && typeof retval.data.bitcoin == "object") {
+                    // console.log('price-retval: ' + JSON.stringify(retval.data,null,2));
+                    price = retval.data.bitcoin[msg.currency];
+                    console.log(price);
+                    notify_creator(msg.user, JSON.stringify({ type: "crypto-price", crytpo: msg.crypto, currency: msg.currency, price: price, invoicePeriod: invoicePeriod }));
+                } else {
+                    console.log('Issue with Crypto: ' + msg.crypto);
+                    // console.log('Response: ' + retval.response.statusText);
+                }
+            }).catch((err) => {
+                console.log('Get Crypto Price Error: ' + err);
+            });
+            // notify_creator(msg.user, JSON.stringify({ type: "crypto-price", crytpo: crypto, currency: currency, price: price }));
         } else {
             console.log('Unknown Action' + msg.action);
         }
@@ -997,8 +1014,10 @@ async function getPrice(ids, vs_currencies) {
    
         return await axios.get(requrl);
     } catch (error) {
-        console.error("An error occurred while fetching the price:", error);
+        // console.error("An error occurred while fetching the price:", error.response.statusText);
         // throw error; // Re-throw the error to propagate it up the call stack
+        console.log("An error occurred while fetching the price: ", error.response.statusText);
+        broadcast(JSON.stringify({ type: "session-info", infoMsg: "Error getting crypto price: " + error.response.statusText + " : Resave Config" }));
         return 100000;
     }
 }
@@ -1113,6 +1132,8 @@ async function processOutbox(timeNow) {
 
 }
 
+const invoicePeriod = (1 * 60); // in seconds
+
 function manageSessions(timeNow) {
     console.log("manageSessions...");
     const numExpired = db.updateExpiredTimeSlots(timeNow, 120);
@@ -1155,7 +1176,6 @@ function manageSessions(timeNow) {
 // console.log("durationPerc: " + durationPerc);
 
     // Find in progress time slots
-    const invoicePeriod = (1 * 60); // in seconds
     // var slots = db.getAllTimeSlots4Period("start", true, timeNow - (60 * 60), timeNow + (1 * 60), "in_progress");
     var slots = db.getInProgressTimeSlots4Period("start", true, timeNow - (60 * 60), timeNow + (1 * 60));
     

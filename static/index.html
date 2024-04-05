@@ -5,6 +5,7 @@
     <title>Web Socket Demo</title>
     <script>
     var bitcoinPrice = 0;
+    var invoicePeriod = 60;
     function log(message)
     {
         console.log(message);
@@ -176,6 +177,26 @@
 
     var inProcessSlotID = "unknown";
 
+    function setCurrencySelect() {
+        log("setCurrencySelect");
+        var currencySelect = document.getElementById("currency-input");
+        // var currencyArray = ["usd", "eur", "gbp", "jpy", "cny", "cad", "aud", "chf", "sek", "nok", "dkk", "rub", "inr", "brl", "try", "zar", "hkd", "sgd", "krw", "mxn", "idr", "myr", "php", "thb", "vnd", "pln", "czk", "huf", "ils", "clp", "php", "cop", "ars", "pen", "uah", "kzt", "kgs", "uzs", "azn", "gel", "amd", "byn", "tjs", "afn", "irr", "iqd", "syp", "lbp", "jod", "egp", "sar", "aed", "qar", "omr", "bhd", "kwd"];
+        // CoinGecko supported currencies
+        var currencyArray = [ "usd", "aed", "ars", "aud", "bdt", "bhd", "bmd", "brl", "cad", "chf", "clp", "cny", "czk", "dkk", "eur", "gbp", "gel", "hkd", "huf", "idr", "ils", "inr", "jpy", "krw", "kwd", "lkr", "mmk", "mxn", "myr", "ngn", "nok", "nzd", "php", "pkr", "pln", "rub", "sar", "sek", "sgd", "thb", "try", "twd", "uah", "vef", "vnd", "zar"];
+
+        // Clear existing options
+        currencySelect.innerHTML = '';
+
+        currencyArray.forEach(function(currency) {
+            var option = document.createElement("option");
+            option.text = currency.toUpperCase();
+            option.value = currency;
+            currencySelect.add(option);
+        });
+    }
+
+    // setCurrencySelect();
+
     function getUserInfo(user) {
         log("getUserInfo: " + user);
         connection.send(JSON.stringify({action: "getUserInfo", user: user}));
@@ -194,7 +215,7 @@
         } else {
             document.getElementById("currency-input").value = "usd";
         }
-        document.getElementById("board-currency-header").innerHTML = (document.getElementById("currency-input").value).toUpperCase();
+        // document.getElementById("board-currency-header").innerHTML = (document.getElementById("currency-input").value).toUpperCase();
         document.getElementById("slots-currency-header").innerHTML = (document.getElementById("currency-input").value).toUpperCase();
         document.getElementById("hostport-field").value = userInfo.hostport;
         document.getElementById("base64cert-field").value = userInfo.base64cert;
@@ -465,7 +486,7 @@
 
                 var ts_satsmin = parseInt(slot.satsmin);
                 var ts_quote = parseFloat(slot.quote);
-                var ts_currency = "";   // USD, EUR, GBP, etc.
+                var ts_currency = (slot.currency).toUpperCase();   // USD, EUR, GBP, etc.
 
                 newRow = bstable.insertRow(-1);
                 newCell = newRow.insertCell(ridx++);
@@ -495,7 +516,7 @@
                 newCell = newRow.insertCell(ridx++);
                 newCell.innerHTML = "<input type='text' size='6' style='text-align: right;' disabled value='" + ts_satsmin + "'/>";
                 newCell = newRow.insertCell(ridx++);
-                newCell.innerHTML = "&nbsp;";
+                newCell.innerHTML = ts_currency;
                 newCell = newRow.insertCell(ridx++);
                 newCell.innerHTML = "<input type='text' size='7' style='text-align: right;' disabled value='" + ts_quote + "'/>";
                 newCell = newRow.insertCell(ridx++);
@@ -524,7 +545,7 @@
 
     function addTimeSlot(hpk, start, duration, satsmin, quote) {
         log("addTimeSlot: " + hpk);
-        connection.send(JSON.stringify({action: "addTimeSlot", hpk: hpk, start: start, duration: duration, satsmin: satsmin, quote: quote}));
+        connection.send(JSON.stringify({action: "addTimeSlot", hpk: hpk, start: start, duration: duration, satsmin: satsmin, quote: quote, currency: document.getElementById("currency-input").value }));
         getBoardSlots();
     }
 
@@ -673,6 +694,10 @@
 
             connection.send(JSON.stringify(tosend));
             setScheduleLink();
+            getCryptoPrice("bitcoin", currency);
+            // document.getElementById("board-currency-header").innerHTML = (document.getElementById("currency-input").value).toUpperCase();
+            document.getElementById("slots-currency-header").innerHTML = (document.getElementById("currency-input").value).toUpperCase();
+            recalcQuote("recalc");
         }
     }
 
@@ -680,6 +705,11 @@
         log("deleteUser");
         connection.send(JSON.stringify({action: "delete-user", user: hpk}));
     }
+
+    function getCryptoPrice(crypto, currency) {
+        log("getCryptoPrice");
+        connection.send(JSON.stringify({action: "get-crypto-price", user: hpk, crypto: crypto, currency: currency }));
+    }   
 
     var connection = null;
 
@@ -701,6 +731,7 @@
             getTimeSlots(hpk);
             getBoardSlots();
             getUserInfo(hpk);
+            getCryptoPrice("bitcoin", document.getElementById("currency-input").value);
             // setScheduleLink();
         };
 
@@ -830,6 +861,12 @@
                     // sessionEnded();
                 } else if (json.type == "userInfo"){
                     setUserInfo(json.userInfo);
+                } else if (json.type == "crypto-price"){
+                    log("crypto-price: " + json.price);
+                    document.getElementById("webln-div").innerHTML = json.price;
+                    bitcoinPrice = parseInt(json.price);
+                    invoicePeriod = parseInt(json.invoicePeriod);
+                    recalcQuote("recalc");
                 } else {
                     log(event.data);
                 }
@@ -937,7 +974,7 @@
                 <th align="center">Min</th><th align="center">&nbsp;</th>
                 <th align="center">Dur</th><th align="center">&nbsp;</th>
                 <th align="center">Sats/Min</th><th align="center">&nbsp;</th>
-                <th align="center" id="board-currency-header">Cur</th><th align="center">&nbsp;</th>
+                <th align="center" id="board-currency-header">Quote</th><th align="center">&nbsp;</th>
                 <th align="left">Link</th>
             </tr>
         </table>
@@ -1036,8 +1073,11 @@
             }
 
             function isNumberKey(evt) {
-                // console.log(JSON.stringify(evt, null, 2));
+                console.log(JSON.stringify(evt, null, 2));
                 var charCode = (evt.which) ? evt.which : evt.keyCode
+                if (typeof charCode == "undefined") {
+                    return false;
+                }
                 console.log("charCode: " + charCode);
                 if ((charCode == 8) || (charCode == 9)) return true; // backspace or tab
                 if ((charCode < 48) || (charCode > 57)) {
@@ -1046,17 +1086,22 @@
                 return true;
             }
 
-            function recalcQuote(event)
+            function recalcQuote(event = "recalc")
             {  
                 const isNum = isNumberKey(event);
                 if (isNum || (event == "recalc")) {
-                
+                    var currency = (document.getElementById("currency-input").value).toUpperCase();
                     var ts_duration = parseInt((document.getElementById("ts-duration")).value);
                     var ts_satsmin = parseInt((document.getElementById("ts-satsmin")).value);
+                    log("ts_duration: " + ts_duration + " ts_satsmin: " + ts_satsmin + " bitcoinPrice: " + bitcoinPrice);
                     var quoteAmt = (((ts_duration * ts_satsmin) / 100000000) * bitcoinPrice).toFixed(2);
+                    var invoicePeriodMins = (invoicePeriod / 60).toFixed(0);
+                    var numInvoices = Math.round(ts_duration / invoicePeriodMins);
+                    var quotePerInvoice = (quoteAmt / numInvoices).toFixed(2);  
                     // let quoteAmtStr = "$" + quoteAmt;
                     document.getElementById("ts-usd").value = quoteAmt;
                     console.log("quoteAmt: " + quoteAmt);
+                    document.getElementById("session-message").innerHTML = currency + " " + quoteAmt + " will be billed over " + numInvoices + " invoices of " + currency + " " + quotePerInvoice + " each every " + invoicePeriodMins + " minutes";     
                 }
                 return isNum;
             }
@@ -1180,8 +1225,8 @@
         <td align="right"><input id="ts-day"      type="text" size="2" value="12"/></td><td align="center">&nbsp;</td>
         <td align="right"><input id="ts-hour"     type="text" size="2" value="13"/></td><td align="center">:</td>
         <td align="right"><input id="ts-minute"   type="text" size="2" value="00"/></td><td align="center">&nbsp;</td>
-        <td align="right"><input id="ts-duration" type="text" size="4" value="5" style="text-align: right;" onkeypress="return recalcQuote(event)" /></td><td align="center">&nbsp;</td>
-        <td align="right"><input id="ts-satsmin"  type="text" size="6" value="1000" style="text-align: right;" onkeypress="return recalcQuote(event)" /></td><td align="center">&nbsp;</td>
+        <td align="right"><input id="ts-duration" type="text" size="4" value="10" style="text-align: right;" onkeyup="return recalcQuote()" /></td><td align="center">&nbsp;</td>
+        <td align="right"><input id="ts-satsmin"  type="text" size="6" value="10000" style="text-align: right;" onkeyup="return recalcQuote()" /></td><td align="center">&nbsp;</td>
         <td align="center"><input id="ts-usd"     type="text" size="7" value="calc" disabled style="text-align: right;"/></td><td align="center">&nbsp;</td>
         <td align="left">
             <button id="test01" onclick="addTSrow()"  style="visibility: block">Add TimeSlot</button>
@@ -1474,7 +1519,22 @@
             document.getElementById("demo").innerHTML = timenow;
         };
 
+        setCurrencySelect();
+
+        // let el = document.getElementById('ts-satsmin');
         
+        // el.addEventListener('keydown', function (event) {
+        //     const key = event.key;
+        //     if (key === "Backspace" || key === "Delete") {
+        //         document.getElementById('receiver-info').innerHTML = key + ' is Pressed!';
+        //         recalcQuote("recalc");
+        //     }
+        // }); 
+
+        // document.getElementById("board-currency-header").innerHTML = (document.getElementById("currency-input").value).toUpperCase();
+        document.getElementById("slots-currency-header").innerHTML = (document.getElementById("currency-input").value).toUpperCase();
+        recalcQuote("recalc");
+
     </script>
     
 

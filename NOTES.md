@@ -1,10 +1,10 @@
 Inspired by https://github.com/jensgertsen/sparkkiosk
 ```sh
-docker buildx build --platform linux/arm64,linux/amd64 --tag horologger/time-into-crypto:v0.0.3 --output "type=registry" .
+docker buildx build --platform linux/arm64,linux/amd64 --tag horologger/time-into-crypto:v0.0.4 --output "type=registry" .
 ```
 Zilla Testing Locally
 ```
-docker buildx build --platform linux/arm64 --tag horologger/time-into-crypto:v0.0.3 --load .
+docker buildx build --platform linux/arm64 --tag horologger/time-into-crypto:v0.0.4 --load .
 
 ```
 
@@ -35,7 +35,7 @@ sudo ./umbrel/scripts/app restart isviable-time-into-crypto
 On Zilla
 ```sh
 su - alunde
-docker pull horologger/time-into-crypto:v0.0.3
+docker pull horologger/time-into-crypto:v0.0.4
 mkdir -p ~/.time-into-crypto/data
 ```
 First run
@@ -45,13 +45,13 @@ docker run \
 -v data:/data \
 -p 21284:21284 \
 --name time-into-crypto \
--it horologger/time-into-crypto:v0.0.3 
+-it horologger/time-into-crypto:v0.0.4 
 ```
 
 On Ragnar
 ```sh
 su - alunde
-docker pull horologger/time-into-crypto:v0.0.3
+docker pull horologger/time-into-crypto:v0.0.4
 mkdir -p ~/.time-into-crypto/data
 ```
 First run
@@ -67,7 +67,7 @@ docker run \
 -v cln-data:/cln:ro \
 -p 21284:21284 \
 --name time-into-crypto \
--it horologger/time-into-crypto:v0.0.3 
+-it horologger/time-into-crypto:v0.0.4 
 
 docker run \
 -e APP_PASSWORD=TimeInto \
@@ -75,7 +75,7 @@ docker run \
 -v data:/data \
 -p 21284:21284 \
 --name time-into-crypto \
--it horologger/time-into-crypto:v0.0.3 
+-it horologger/time-into-crypto:v0.0.4 
 
 ```
 Better runs
@@ -90,7 +90,7 @@ docker run \
 -v cln-data:/cln:ro \
 -p 8080:8080 \
 --name time-into-crypto \
--it horologger/time-into-crypto:v0.0.3 
+-it horologger/time-into-crypto:v0.0.4 
 
 ```
 Inspect
