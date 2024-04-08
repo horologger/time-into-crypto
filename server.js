@@ -68,6 +68,8 @@ const {authenticatedLndGrpc} = require('ln-service');
 
 const fs = require('fs');
 
+var exchange_key = process.env[`EXCHANGE_KEY`]; 
+
 var nwc_relay = process.env[`RELAY`]; 
 
 var cert = process.env[`LNCLI_TLSCERT`];
@@ -1012,7 +1014,15 @@ async function getPrice(ids, vs_currencies) {
     try {
         let requrl = "https://api.coingecko.com/api/v3/simple/price?ids=" + ids + "&vs_currencies=" + vs_currencies;
    
-        return await axios.get(requrl);
+        var params = null;
+        if (typeof exchange_key != "undefined") {
+            params = { headers: { 'x-cg-demo-api-key': exchange_key } };
+        } else {
+            console.log("No exchange_key defined!");
+            console.log("Calls to coingecko may be rate limited.");
+        }
+
+        return await axios.get(requrl, params );
     } catch (error) {
         // console.error("An error occurred while fetching the price:", error.response.statusText);
         // throw error; // Re-throw the error to propagate it up the call stack

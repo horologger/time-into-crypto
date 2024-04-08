@@ -8,3 +8,4 @@ data/
 yarn.lock
 package-lock.json
 ln-service.js
+setenv.sh
